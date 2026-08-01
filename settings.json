@@ -1,0 +1,11 @@
+{
+  "defaultModel": "deepseek-v4-flash",
+  "defaultProvider": "opencode-go",
+  "defaultThinkingLevel": "max",
+  "hideThinkingBlock": true,
+  "theme": "dark",
+  "packages": [
+    "npm:@ollama/pi-web-search",
+    "ssh://git@git.sudakov.site:2223/DenisSud/pi-setup.git"
+  ]
+}
