@@ -67,6 +67,6 @@ git add -A && git commit -m "..." && git push
 
 The following intentionally stay out of this repo:
 
-- `~/.pi/agent/memory/` — personal memory notes, tracked in [`DenisSud/memory`](https://git.sudakov.site/DenisSud/memory)
+- `~/.pi/agent/memory/` — personal memory notes, tracked in [`DenisSud/memory-notes`](https://git.sudakov.site/DenisSud/memory-notes)
 - `~/.pi/agent/auth.json`, `models.json`, `models-store.json` — credentials and private model configs
 - `sessions/`, `npm/` (installed deps), `git/` (pi's package clones)
