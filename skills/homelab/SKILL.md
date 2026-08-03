@@ -102,26 +102,26 @@ podman exec -u git forgejo forgejo admin user list   # List users
 
 ## Services on PC
 
-### Jellyfin — Docker Compose at `~/jellyfin/compose.yml` (moved from ~/pc-services)
-- Port: 8096 (LAN only)
-- GPU transcoding via NVIDIA RTX 5070, user 1000:100
-- Data: `~/jellyfin/config`, media: `~/jellyfin/media` mounted read-only at `/media` in container
-- Movies library root on host: `~/jellyfin/media/movies/` (folder per movie: `Name (year)/Name (year).ext`)
-- **API key: `REDACTED_JELLYFIN_API_KEY`** (old key `dfa37c...` is dead → 401). Fresh keys: `sqlite3 ~/jellyfin/config/data/jellyfin.db "SELECT AccessToken FROM ApiKeys;"`
+### Jellyfin — Docker Compose at `~/pc-services/jellyfin/compose.yml`
+- Port: 8096 (no longer proxied via Caddy — accessible on LAN only or via VPN/tunnel)
+- GPU transcoding via NVIDIA RTX 5070
+- Mounts: `/mnt/media/Movies:/media/movies:ro`, `/mnt/media/TV:/media/tv:ro`, `/home/denis/Videos/Movies:/media/videos:ro`, `/home/denis/Videos/TV_Shows:/media/tv_shows:ro`
+- API key: `REDACTED_JELLYFIN_API_KEY`
 - Library IDs: Movies `REDACTED_LIBRARY_ID`, TV `REDACTED_LIBRARY_ID`
 - **Russia note:** TheMovieDB is blocked. Use TheTVDB for metadata, Fanart.tv for images.
+- **Adding mounts** requires `docker compose down && docker compose up -d` (restart isn't enough)
 
-### Media stack — Docker Compose at `~/media-stack/compose.yml` (NOT running by default)
-- Services: qbittorrent (WebUI 8090), prowlarr, radarr, jellyseerr, byparr; mihomo config dir exists but service is NOT in compose
-- Download client is **qBittorrent**, NOT Transmission (Transmission daemon no longer installed)
-- Start: `cd ~/media-stack && docker compose up -d <svc>`
-- qBittorrent downloads to `~/media-stack/downloads`
+### Marimo — Docker container on PC
+- Port: 2718 (not proxied via Caddy)
+- Image: `ghcr.io/marimo-team/marimo:latest`
+- Container name: `marimo`
+- Accessible at `http://192.168.1.20:2718`
 
-### TorrentClaw access from this IP
-- **torrentclaw.com is Cloudflare-blocked from this machine's IP** (curl → 000, browser → timeout). Only works via VPN/proxy egress or the `web_fetch` tool
-- mihomo (Clash Meta, VLESS+REALITY Lagom VPN proxies) config at `~/media-stack/config/mihomo/config.yaml`; run ad-hoc: `docker run -d --name mihomo --network host -v ~/media-stack/config/mihomo:/config metacubex/mihomo -d /config` → mixed proxy at `localhost:7890` (use `curl -x http://localhost:7890`)
-- API key: `REDACTED_TORRENTCLAW_API_KEY`. Via proxy you still get Cloudflare 403 on bare curl — byparr is needed to pass the challenge
-- byparr is **FlareSolverr-style**: `POST http://localhost:8191/v1` with `{"cmd":"request.get","url":"..."}` (no custom headers supported → API key auth via header doesn't work through byparr)
+### Transmission — system-level daemon on PC
+- User: `denis` (override in `/etc/systemd/system/transmission-daemon.service.d/override.conf`)
+- Download dir: `/home/denis/Downloads/media/` (fast NVMe)
+- Use `sudo systemctl restart transmission-daemon` (NOT `--user`)
+- Quick commands: `transmission-remote -l` (list), `transmission-remote -a 'MAGNET' -w /home/denis/Downloads/media` (add)
 
 ### Ollama — DISABLED (2026-07-28)
 - Service is masked. Model data at `/var/lib/ollama/models` remains.
@@ -144,15 +144,24 @@ Response gives `results[].torrents[]` with `magnetUrl`, `infoHash`, `qualityScor
 
 ## Media Organization for Jellyfin
 
+### TV Shows
+```
+/mnt/media/TV/Show Name/          ← NO year in folder name
+├── Season 01/                    ← zero-padded
+│   ├── Show Name S01E01 Title.mkv
+│   └── Show Name S01E02 Title.mkv
+└── Season 02/
+    └── Show Name S02E01 Title.mkv
+```
+
 ### Movies
 ```
-~/jellyfin/media/movies/Movie Name (year)/Movie Name (year).ext
+/mnt/media/Movies/Movie Name (year).mkv
 ```
-(folder-per-movie; matches existing convention)
 
 ### Scan trigger
 ```bash
-# Movies (get key from jellyfin.db if 401)
+# Movies
 curl -s -X POST -H 'X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY' \
   'http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID'
 # TV
@@ -170,48 +179,51 @@ ssh denis@192.168.1.20 "curl -s -G -H 'x-search-source: skill' \
 ```
 Pick highest `qualityScore` torrent. For season packs, `season` matches and `episode` is `null`.
 
-### 2. Add to qBittorrent
+### 2. Add to Transmission
 ```bash
-# Start stack first: cd ~/media-stack && docker compose up -d qbittorrent
-# WebUI: http://localhost:8090 (API: POST /api/v2/auth/login, then /api/v2/torrents/add)
-curl -s -c /tmp/qb.cookies -d 'username=admin&password=REDACTED' http://localhost:8090/api/v2/auth/login
-curl -s -b /tmp/qb.cookies --data-urlencode 'urls=MAGNET_URL' 'http://localhost:8090/api/v2/torrents/add'
+ssh denis@192.168.1.20 "transmission-remote -a 'MAGNET_URL' -w /home/denis/Downloads/media"
 ```
-Downloads land in `~/media-stack/downloads`.
 
 ### 3. Monitor download
 ```bash
-curl -s -b /tmp/qb.cookies 'http://localhost:8090/api/v2/torrents/info' | jq '.[] | {name, progress, state, dlspeed}'
+ssh denis@192.168.1.20 "transmission-remote -l"
+ssh denis@192.168.1.20 "transmission-remote -t 1 -i | grep -E 'State|Percent|Speed|ETA'"
 ```
+- If "Idle" >30s: check tracker status with `-it`, verify HTTP tracker reachable
 - Hard timeout: 3 hours. If incomplete, remove and try next result.
 
 ### 4. Organize
-**TV:** Season folders zero-padded ("Season 01"), filenames must have SXXEYY. Remove year from show folder.
+**TV:** Find files → organize on NVMe → batch-copy to external. Season folders zero-padded ("Season 01"), filenames must have SXXEYY. Remove year from show folder.
 
-**Movie:** Move into `~/jellyfin/media/movies/Name (year)/Name (year).ext` (folder per movie).
+**Movie:** Copy to `/mnt/media/Movies/Name (year).ext` or `/home/denis/Videos/Movies/` for custom mount.
 
 ```bash
 # Find downloaded files
-find ~/media-stack/downloads/ -type f \( -name '*.mkv' -o -name '*.mp4' \)
-# Move to library
-mkdir -p ~/jellyfin/media/movies/'Movie Name (2025)'
-mv '~/media-stack/downloads/path/file.mkv' ~/jellyfin/media/movies/'Movie Name (2025)'/'Movie Name (2025).mkv'
+ssh denis@192.168.1.20 "find /home/denis/Downloads/media/ -type f \( -name '*.mkv' -o -name '*.mp4' \)"
+# Copy to destination
+ssh denis@192.168.1.20 "cp '/home/denis/Downloads/media/path/file.mkv' '/mnt/media/Movies/Movie Name (2025).mkv'"
+# Cleanup
+ssh denis@192.168.1.20 "rm -rf /home/denis/Downloads/media/*"
 ```
 
-### 5. Scan library
+### 5. Stop seeding + scan
 ```bash
-curl -s -X POST -H 'X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY' \
-  'http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID'
+ssh denis@192.168.1.20 "transmission-remote -t ID --stop && transmission-remote -t ID --remove"
+ssh denis@192.168.1.20 'curl -s -X POST -H "X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY" "http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID"'
 ```
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| TorrentClaw unreachable (curl → 000 / byparr timeout) | Cloudflare blocks this IP. Egress via mihomo VPN (see TorrentClaw section above); bare curl through proxy still gets 403, byparr browser needed to pass challenge |
-| API key 401 on Jellyfin | Get fresh key: `sqlite3 ~/jellyfin/config/data/jellyfin.db "SELECT AccessToken FROM ApiKeys;"` |
+| Torrent stays "Idle" | Re-add with HTTP trackers only; check `curl http://tracker.torrentclaw.com:6969` |
+| "Permission denied" in daemon logs | Re-run Transmission setup; ensure User=denis override |
+| External drive read-only | `sudo mount -o remount,rw /mnt/media` (stop Jellyfin first) |
 | Jellyfin shows 0 series | Switch to TheTVDB in Jellyfin UI (TMDB blocked in Russia) |
+| New mount not visible | Full recreate: `docker compose down && docker compose up -d` |
 | UDP "IPv4 connection failed" | Expected — UDP blocked, HTTP trackers still work |
+| Library scan returns 401 | Check API key `REDACTED_JELLYFIN_API_KEY` |
 | Empty library after scan | Delete and recreate library (empty-dir watcher bug) |
+| `transmission-remote -tr` crashes | Known bug in 4.1.0-beta.2, avoid `-tr` |
 | Forgejo SSH "Permission denied" | Check key added via `podman exec -u git forgejo forgejo admin user list` and re-add via API |
 | Forgejo not starting after reboot | Verify `systemctl --user enable podman-restart --now` on RPi; check `podman ps` |
