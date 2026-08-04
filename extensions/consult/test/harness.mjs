@@ -127,7 +127,7 @@ test("no auth → clean error", async () => {
 	assert(/API key/.test(result.content[0].text), `message: ${result.content[0].text}`);
 });
 
-test("fake stream → answer, reasoning, usage, cost composed", async () => {
+test("fake stream → answer, reasoning, usage, cost composed; static system prompt; focus in user message", async () => {
 	const partial = { role: "assistant", content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 	const finalMessage = {
 		role: "assistant",
@@ -138,11 +138,13 @@ test("fake stream → answer, reasoning, usage, cost composed", async () => {
 		api: "openai-completions",
 		provider: "opencode-go",
 		model: "kimi-k3",
-		usage: { input: 1200, output: 800, cacheRead: 0, cacheWrite: 0, reasoning: 500 },
+		usage: { input: 1200, output: 800, cacheRead: 500, cacheWrite: 0, reasoning: 500 },
 		stopReason: "stop",
 		timestamp: Date.now(),
 	};
-	const provider = fakeProvider(() => {
+	let captured;
+	const provider = fakeProvider((model, context, options) => {
+		captured = { systemPrompt: context.systemPrompt, userText: context.messages[0].content[0].text, options };
 		const stream = createAssistantMessageEventStream();
 		queueMicrotask(() => {
 			stream.push({ type: "start", partial });
@@ -165,10 +167,21 @@ test("fake stream → answer, reasoning, usage, cost composed", async () => {
 	assert(result.content[0].text === "## Verdict\nWorkable with changes.\n\n## Key concerns\n...", "answer text");
 	assert(result.details.reasoning.includes("decoupling"), "reasoning trace present");
 	assert(result.details.usage.input === 1200 && result.details.usage.reasoning === 500, "usage");
-	const expectedCost = (1200 * 3 + 800 * 15) / 1e6;
+	assert(result.details.usage.cacheRead === 500, "cacheRead usage recorded");
+	const expectedCost = (1200 * 3 + 800 * 15 + 500 * 0.3) / 1e6;
 	assert(Math.abs(result.details.costUsd - expectedCost) < 1e-9, `cost ${result.details.costUsd}`);
 	assert(result.details.focus === "risks", "focus recorded");
 	assert(updates.length >= 2, `progress updates streamed (${updates.length})`);
+
+	// system prompt must be fully static (prefix-cache friendly): verdict line, caps, no focus interpolation
+	assert(captured.systemPrompt.includes("VERDICT: sound | workable | wrong"), "parseable verdict line");
+	assert(captured.systemPrompt.includes("under 600 words"), "verbosity cap");
+	assert(captured.systemPrompt.includes("manufacture criticism"), "confidence gating");
+	assert(!captured.systemPrompt.includes("## Focus"), "system prompt has no per-call focus");
+	// focus instruction lives in the user message instead
+	assert(captured.userText.includes("## Focus") && captured.userText.includes("Focus: risks"), "focus in user message");
+	assert(captured.userText.includes("## Proposal") && captured.userText.includes("## Question"), "proposal/question present");
+	assert(captured.options.maxTokens === 8000, `output cap 8000, got ${captured.options.maxTokens}`);
 });
 
 test("fake stream provider error → isError with errorMessage", async () => {
@@ -234,20 +247,32 @@ test("live kimi-k3 consult (opt-in)", async () => {
 	assert(key, "CONSULT_KEY required for live test");
 	const api = openAICompletionsApi();
 	const provider = fakeProvider((model, context, options) => api.streamSimple(model, context, options));
-	const result = await runTool(
-		{
-			proposal: "I plan to train a JEPA world model on 64x64 grid observations with a single shared encoder, no EMA, SIGReg anti-collapse, and an AdaLN-Zero predictor.",
-			question: "Is this architecture sound, and what is the biggest risk?",
-			reasoning: "low",
-		},
+	const opts = {
+		proposal:
+			"I plan to train a JEPA world model on 64x64 grid observations with a single shared encoder, no EMA, SIGReg anti-collapse, and an AdaLN-Zero predictor.",
+		question: "Is this architecture sound, and what is the biggest risk?",
+		reasoning: "low",
+	};
+	// call 1: cache miss expected
+	const r1 = await runTool(opts, { registry: makeRegistry({ provider, auth: { auth: { apiKey: key } } }) });
+	assert(r1.isError !== true, `not an error: ${r1.content[0].text}`);
+	assert(r1.content[0].text.length > 50, "substantial answer");
+	assert(r1.details.usage?.input > 0, "usage present");
+	assert(typeof r1.details.costUsd === "number" && r1.details.costUsd > 0, "cost computed");
+	console.log(
+		`  live #1: $${r1.details.costUsd.toFixed(4)}  in=${r1.details.usage.input}  out=${r1.details.usage.output}  cacheRead=${r1.details.usage.cacheRead}`,
+	);
+	// call 2: identical static system prompt should hit the prefix cache
+	const r2 = await runTool(
+		{ ...opts, proposal: opts.proposal + " (second pass, different proposal text)" },
 		{ registry: makeRegistry({ provider, auth: { auth: { apiKey: key } } }) },
 	);
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(result.content[0].text.length > 50, "substantial answer");
-	assert(result.details.usage?.input > 0, "usage present");
-	assert(typeof result.details.costUsd === "number" && result.details.costUsd > 0, "cost computed");
-	console.log(`  live: ${result.details.costUsd.toFixed(4)} USD, ${result.details.usage.output} output tokens`);
-	console.log(`        answer head: ${result.content[0].text.slice(0, 120).replace(/\n/g, " ")}…`);
+	assert(r2.isError !== true, `2nd call not an error: ${r2.content[0].text}`);
+	console.log(
+		`  live #2: $${r2.details.costUsd.toFixed(4)}  in=${r2.details.usage.input}  out=${r2.details.usage.output}  cacheRead=${r2.details.usage.cacheRead}`,
+	);
+	assert(r2.details.usage.cacheRead > 0, `prefix cache should hit on 2nd call, got cacheRead=${r2.details.usage.cacheRead}`);
+	console.log(`        answer head: ${r1.content[0].text.slice(0, 120).replace(/\n/g, " ")}…`);
 });
 
 runTests();

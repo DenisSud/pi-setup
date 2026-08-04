@@ -20,9 +20,13 @@
  *     reasoning trace, token usage, and estimated cost in details so the
  *     agent can judge both the advice and the price.
  *
- * Cost: Kimi K3 is $3/MTok input / $15/MTok output. A typical consult runs
- * $0.05–0.30. Default reasoning effort is "high"; use "max" for the strongest
- * critique (slower), "low" for cheap quick sanity checks.
+ * Cost: Kimi K3 is $3/MTok input / $15/MTok output / $0.3/MTok cacheRead.
+ * A typical consult runs $0.05–0.30. The system prompt is fully static and
+ * marked for caching (explicit cache_control opt-in, since the catalog does
+ * not declare cacheControlFormat for kimi-k3), so repeated consults hit the
+ * endpoint's prefix cache at the cacheRead rate. Default reasoning effort is
+ * "high"; use "max" for the strongest critique (slower), "low" for cheap
+ * quick sanity checks.
  *
  * Config: provider/model are resolved from the pi model registry, so no
  * hardcoded endpoints or keys. Override the consulted model per call with
@@ -39,7 +43,7 @@ const PROVIDER = "opencode-go";
 const DEFAULT_MODEL = "kimi-k3";
 
 /** Cap on generated tokens (thinking + answer) per consult. */
-const MAX_OUTPUT_TOKENS = 24000;
+const MAX_OUTPUT_TOKENS = 8000;
 /** Cap for the reasoning trace embedded in tool details (chars). */
 const REASONING_CAP_CHARS = 12000;
 /** Throttle for live progress updates (ms). */
@@ -47,7 +51,9 @@ const UPDATE_THROTTLE_MS = 300;
 /** Answer preview length shown in progress updates (chars). */
 const ANSWER_PREVIEW_CHARS = 3000;
 
-/** Per-focus instruction appended to the consultant system prompt. */
+/** Per-focus instruction appended to the USER message (not the system prompt —
+ *  the system prompt must stay static so repeated consults hit the endpoint's
+ *  prefix cache: cacheRead $0.3/MTok vs $3/MTok input). */
 const FOCUS_PROMPTS: Record<string, string> = {
 	"critical-review":
 		"Focus: a general critical review — what is wrong, what is risky, what is overcomplicated, and what to change.",
@@ -62,34 +68,36 @@ const FOCUS_PROMPTS: Record<string, string> = {
 };
 
 /**
- * The consultant system prompt. The consulted model must be told it has no
- * access to the repo — otherwise it will fabricate knowledge of files it
- * never saw.
+ * The consultant system prompt. Fully static — no per-call interpolation — so
+ * the endpoint's prefix cache (cacheRead) covers it across all consults.
+ * The consulted model must be told it has no access to the repo — otherwise it
+ * will fabricate knowledge of files it never saw.
  */
-function buildSystemPrompt(focus?: string): string {
-	const focusLine = focus && FOCUS_PROMPTS[focus] ? FOCUS_PROMPTS[focus] : "";
+function buildSystemPrompt(): string {
 	return `You are a principal engineer acting as an external consultant. An AI coding agent asked you to review a proposal. You cannot see its codebase or conversation — you work only from what it sends you, and where the proposal references things you cannot inspect, say that you are assuming.
 
-Give a direct, honest assessment. No sycophancy: if the proposal is wrong, overcomplicated, or built on shaky assumptions, say so clearly and first. Praise only what genuinely earns it, and briefly.
+Give a direct, honest assessment. No sycophancy. If the proposal's framing itself is wrong — wrong goal, wrong constraint, false premise — say so first. Do not manufacture criticism: if the proposal is fundamentally sound, say so plainly. Only flag issues you are genuinely confident are real, and rate each concern's confidence (high/medium/low) that it is a real problem.
 
-${focusLine}
+Hard cap: respond in under 600 words. Dense; every sentence must earn its place. Do not restate the proposal.
 
 Respond in Markdown:
 1. **Verdict** — one or two sentences: sound / workable with changes / wrong.
-2. **Key concerns** — the most important problems, ordered by severity. Be specific: name the actual weak spot (coupling, ordering, missing case, risky assumption, overengineering), not generic advice.
+2. **Key concerns** — the most important problems, ordered by severity, each with a confidence rating (high/medium/low).
 3. **What's right** — what should stay as-is.
 4. **Recommendations** — concrete changes in order of impact. Prefer the simplest approach that still meets the goals; explicitly call out where the proposal is more complex than needed.
 5. **Open questions** — what the requester must verify or decide before proceeding.
 
-Do not restate the proposal. Every sentence should earn its place.`;
+End with a single parseable line, nothing after it: VERDICT: sound | workable | wrong (confidence 0–1)`;
 }
 
 /** Assemble the user message from the optional parts. */
-function buildUserText(proposal: string, context?: string, question?: string): string {
+function buildUserText(proposal: string, context?: string, question?: string, focus?: string): string {
 	const parts: string[] = [];
 	parts.push(`## Proposal\n\n${proposal}`);
 	if (context?.trim()) parts.push(`## Context\n\n${context.trim()}`);
 	if (question?.trim()) parts.push(`## Question\n\n${question.trim()}`);
+	const focusLine = focus && FOCUS_PROMPTS[focus];
+	if (focusLine) parts.push(`## Focus\n\n${focusLine}`);
 	return parts.join("\n\n");
 }
 
@@ -107,8 +115,10 @@ export default function consultExtension(pi: ExtensionAPI) {
 		promptSnippet:
 			"Consult a frontier model (Kimi K3) for expert feedback on a design, architecture, or plan",
 		promptGuidelines: [
-			"Use consult when you need a second opinion from a much stronger model before committing to an approach — validating an architecture, stress-testing a design decision, or choosing between alternatives.",
-			"The consulted model cannot see the repo or conversation: pass the full proposal text (paste the actual design, not a summary) and put relevant code snippets or constraints into the context parameter yourself.",
+			"Use consult when you need a second opinion from a much stronger model before committing: validating an architecture, stress-testing a design decision, choosing between alternatives, stuck on a recurring error, or before declaring consequential work done.",
+			"Do not consult for trivial or fully reversible decisions, or before you have a concrete proposal — the consultant needs a real design to react to, and premature consultation is wasted inference.",
+			"Pass the full proposal (paste the actual design, not a summary) and put constraints, prior decisions, and relevant code snippets into the context parameter yourself — the consulted model cannot see the repo or conversation.",
+			"Treat the result as claims to verify against the repo, not ground truth. Ask one specific question via the question parameter, and pick focus and reasoning to match the stakes: low for a cheap sanity check, max for a deep critique.",
 		],
 		parameters: Type.Object({
 			proposal: Type.String({
@@ -242,6 +252,16 @@ async function runConsult(
 		);
 	}
 
+	// ── prompt caching ──────────────────────────────────────────────────
+	// The system prompt is static, and with cacheControlFormat: "anthropic"
+	// pi-ai marks it with cache_control so the endpoint caches the prefix
+	// across consults (cacheRead $0.3/MTok vs $3/MTok input). The catalog does
+	// not declare cacheControlFormat for kimi-k3, so opt in by cloning the
+	// model; if a future catalog entry declares it, use the model as-is.
+	const cachedModel = model.compat?.cacheControlFormat
+		? model
+		: { ...model, compat: { ...(model.compat ?? {}), cacheControlFormat: "anthropic" } };
+
 	// ── build the consult prompt ─────────────────────────────────────────
 	const reasoning = (params.reasoning ?? "high") as "low" | "high" | "max";
 	const streamOptions: SimpleStreamOptions = {
@@ -250,6 +270,7 @@ async function runConsult(
 		headers,
 		reasoning,
 		maxTokens: MAX_OUTPUT_TOKENS,
+		cacheRetention: "short",
 	};
 
 	onUpdate?.({ content: [{ type: "text", text: `Consulting ${model.id} (${reasoning} effort)…` }] });
@@ -267,13 +288,13 @@ async function runConsult(
 	// ── stream through pi-ai's real provider path ────────────────────────
 	try {
 		const stream = provider.streamSimple(
-			model,
+			cachedModel,
 			{
-				systemPrompt: buildSystemPrompt(params.focus),
+				systemPrompt: buildSystemPrompt(),
 				messages: [
 					{
 						role: "user",
-						content: [{ type: "text", text: buildUserText(params.proposal, params.context, params.question) }],
+						content: [{ type: "text", text: buildUserText(params.proposal, params.context, params.question, params.focus) }],
 					},
 				],
 			},
@@ -325,7 +346,10 @@ async function runConsult(
 		const usage = result.usage;
 		const costUsd =
 			usage && model.cost
-				? (usage.input * (model.cost.input ?? 0) + usage.output * (model.cost.output ?? 0)) / 1_000_000
+				? (usage.input * (model.cost.input ?? 0) +
+						usage.output * (model.cost.output ?? 0) +
+						usage.cacheRead * (model.cost.cacheRead ?? 0)) /
+					1_000_000
 				: undefined;
 
 		const reasoningTruncated = thinkingText.length > REASONING_CAP_CHARS;
