@@ -18,7 +18,7 @@ The `pi-setup` pi package: Denis's skills + extensions + shareable settings, ins
 Tool `description`, `promptSnippet`, and `promptGuidelines` are rendered verbatim into the agent's system prompt. They are **instructions the model follows literally** — editing them changes agent behavior more than any code path. Phrasing is load-bearing:
 
 - **bash-background** — the contract is *never poll a background job*. When a job finishes, the completion notification is fed back into the agent loop as a user message (new turn when idle via `triggerTurn`, queued continuation while streaming — verified in pi's `agent-session.sendCustomMessage` + `messages.convertToLlm`). The agent should continue working or end its turn. Do not reintroduce sleep-loop idioms ("wait: `while kill -0 …`") into the copy, and keep the "you will be re-invoked" framing in the tool result.
-- **consult** — deliberately liberal posture: cheap (tens of cents), the default second opinion for any non-trivial decision. Do not reintroduce conservative gatekeeping ("only for big moments", "don't waste inference").
+- **consult** — neutral usage posture, stated in the extension header: the copy describes when consult is useful and how to use it well — no frequency hype, no gatekeeping (neither "only for big decisions" nor "consult early and often"). Keep it matter-of-fact when editing.
 - **sysinfo** — read-only machine facts injected into the system prompt; keep it fast and side-effect-free.
 
 ## Repo layout

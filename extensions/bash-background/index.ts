@@ -348,7 +348,7 @@ export default function (pi: ExtensionAPI) {
 
 			const manageHints = job.pid
 				? `\n\nContinue working or end your turn; you will be re-invoked with the output when it ` +
-					`Kill the whole tree: \`kill -TERM -${job.pid}\`. Any signal: \`kill -SIGNAME ${job.pid}\`.`
+					`finishes. Kill the whole tree: \`kill -TERM -${job.pid}\`. Any signal: \`kill -SIGNAME ${job.pid}\`.`
 				: "";
 			return {
 				content: [
