@@ -42,10 +42,6 @@ const PROVIDER = "opencode-go";
 /** Default consultant model. */
 const DEFAULT_MODEL = "kimi-k3";
 
-/** Cap on generated tokens (thinking + answer) per consult. */
-const MAX_OUTPUT_TOKENS = 8000;
-/** Cap for the reasoning trace embedded in tool details (chars). */
-const REASONING_CAP_CHARS = 12000;
 /** Throttle for live progress updates (ms). */
 const UPDATE_THROTTLE_MS = 300;
 /** Answer preview length shown in progress updates (chars). */
@@ -269,7 +265,6 @@ async function runConsult(
 		apiKey,
 		headers,
 		reasoning,
-		maxTokens: MAX_OUTPUT_TOKENS,
 		cacheRetention: "short",
 	};
 
@@ -352,15 +347,13 @@ async function runConsult(
 					1_000_000
 				: undefined;
 
-		const reasoningTruncated = thinkingText.length > REASONING_CAP_CHARS;
 		return {
 			content: [{ type: "text", text: finalAnswer }],
 			details: {
 				model: model.id,
 				provider: PROVIDER,
 				focus: params.focus ?? "critical-review",
-				reasoning: thinkingText.slice(0, REASONING_CAP_CHARS),
-				reasoningTruncated,
+				reasoning: thinkingText,
 				usage: usage
 					? {
 							input: usage.input,

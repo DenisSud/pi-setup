@@ -181,7 +181,7 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 	// focus instruction lives in the user message instead
 	assert(captured.userText.includes("## Focus") && captured.userText.includes("Focus: risks"), "focus in user message");
 	assert(captured.userText.includes("## Proposal") && captured.userText.includes("## Question"), "proposal/question present");
-	assert(captured.options.maxTokens === 8000, `output cap 8000, got ${captured.options.maxTokens}`);
+	assert(captured.options.maxTokens === undefined, `no output cap set, got ${captured.options.maxTokens}`);
 });
 
 test("fake stream provider error → isError with errorMessage", async () => {
