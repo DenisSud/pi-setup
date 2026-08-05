@@ -17,7 +17,7 @@
  *       `kill -TERM -<pid>`  terminate the whole tree
  *       `kill -USR1 <pid>`   send any signal
  *       `ps -p <pid>`        inspect
- *       `kill -0 <pid>`      probe (never sleep-poll — see contract below)
+ *       `kill -0 <pid>`      probe
  *   - stdout/stderr stream into `logFile` (kept until session end); the model
  *     tails/greps it with plain bash or read.
  *   - When the job finishes, a follow-up notification with the output tail is
@@ -25,11 +25,12 @@
  *     a new turn when idle (triggerTurn) and queues a continuation while
  *     streaming (verified in agent-session.sendCustomMessage + core
  *     messages.convertToLlm: role "custom" → user text).
- *   - Contract: the model must NEVER sleep-poll a running job
- *     (`while kill -0 <pid>; do sleep 2; done`). It continues working or ends
- *     its turn; the completion notification re-invokes it. The tool copy
- *     (parameter description + returned text) enforces this — keep it that way.
- *     Exit codes reflect external kills, so the state never desyncs.
+ *   - Contract: the model never sleep-polls a running job
+ *     (`while kill -0 <pid>; do sleep 2; done`); it continues working or ends
+ *     its turn, and the completion notification re-invokes it. The tool copy
+ *     (parameter description + returned text) states this matter-of-factly —
+ *     keep it that way. Exit codes reflect external kills, so the state never
+ *     desyncs.
  *   - Background jobs default to a 1h safety-net timeout; pass `timeout` to
  *     override.
  *   - Jobs survive turn aborts; on session shutdown they receive SIGTERM to
@@ -286,7 +287,6 @@ export default function (pi: ExtensionAPI) {
 						"for compound commands (children share the group). Manage it with plain bash: " +
 						"`kill -TERM -<pid>` terminates the whole tree, `kill -USR1 <pid>` sends any signal, " +
 						"`ps -p <pid>` inspects, `kill -0 <pid>` probes. " +
-						"DO NOT wait for the job by polling or sleeping in a loop — that wastes the turn. " +
 						"Continue with other work or end your turn; when the job finishes, a follow-up notification " +
 						"with the output tail is delivered and starts a new turn, so the result is fed back to you " +
 						"like any other tool result. " +
@@ -347,7 +347,7 @@ export default function (pi: ExtensionAPI) {
 			job.pid = await waitForPid(job);
 
 			const manageHints = job.pid
-				? `\n\nDo not poll or sleep-wait for this job — continue working or end your turn; ` +
+				? `\n\nContinue working or end your turn; you will be re-invoked with the output when it ` +
 					`Kill the whole tree: \`kill -TERM -${job.pid}\`. Any signal: \`kill -SIGNAME ${job.pid}\`.`
 				: "";
 			return {
