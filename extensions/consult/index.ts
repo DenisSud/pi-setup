@@ -5,6 +5,11 @@
  * (Kimi K3 via the opencode-go provider, by default) to review a design,
  * architecture, or plan before committing to it.
  *
+ * Usage posture: LIBERAL by design. The call is cheap (tens of cents) and the
+ * prompt guidelines tell the agent to reach for it on any non-trivial decision
+ * — not to save it for big moments. Keep that phrasing when editing; a shy
+ * agent is the failure mode, not a spendy one.
+ *
  * Design:
  *   - The consulted model is fully independent: it sees only the proposal,
  *     context, and question the agent passes. No repo, no session history.
@@ -107,12 +112,12 @@ export default function consultExtension(pi: ExtensionAPI) {
 		name: "consult",
 		label: "Consult",
 		description:
-			"Ask a frontier model (Kimi K3) for expert feedback on a design, architecture, or plan. Use it as a second opinion before committing to an approach: it stress-tests the proposal, surfaces risks, and suggests simpler alternatives. The consulted model sees only what you pass in — it has no access to the repo or conversation, so include the full proposal text and any relevant code/constraints.",
+			"Ask a frontier model (Kimi K3) for expert feedback on a design, architecture, or plan. Your default second opinion: cheap (tens of cents), fast, independent — it stress-tests the proposal, surfaces risks, and suggests simpler alternatives. The consulted model sees only what you pass in — it has no access to the repo or conversation, so include the full proposal text and any relevant code/constraints.",
 		promptSnippet:
 			"Consult a frontier model (Kimi K3) for expert feedback on a design, architecture, or plan",
 		promptGuidelines: [
-			"Use consult when you need a second opinion from a much stronger model before committing: validating an architecture, stress-testing a design decision, choosing between alternatives, stuck on a recurring error, or before declaring consequential work done.",
-			"Do not consult for trivial or fully reversible decisions, or before you have a concrete proposal — the consultant needs a real design to react to, and premature consultation is wasted inference.",
+			"Consult early and often: any design decision, architecture or abstraction choice, choice between alternatives, unclear approach, recurring error, or work you are about to call done is a candidate. When in doubt, consult — it is cheap, independent, and catches blind spots you cannot see from inside the task.",
+			"You do not need a polished proposal — paste what you have, as precisely as you can. If the design is half-formed, say so and ask what is missing; the consultant can still flag wrong constraints and missing risks.",
 			"Pass the full proposal (paste the actual design, not a summary) and put constraints, prior decisions, and relevant code snippets into the context parameter yourself — the consulted model cannot see the repo or conversation.",
 			"Treat the result as claims to verify against the repo, not ground truth. Ask one specific question via the question parameter, and pick focus and reasoning to match the stakes: low for a cheap sanity check, max for a deep critique.",
 		],
