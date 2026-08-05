@@ -293,7 +293,6 @@ export default function (pi: ExtensionAPI) {
 						"Output streams to logFile (kept until session end) - tail or grep it anytime. " +
 						"Background jobs default to a 1h safety-net timeout (pass `timeout` to override, e.g. for " +
 						"long-running training); on timeout the job is terminated and reported like any exit. " +
-						"A follow-up notification with the output tail arrives when the job finishes. " +
 						"If the command backgrounded its own children, the notification flags them and they " +
 						"remain manageable via the pid (their post-exit output is not captured). " +
 						"Jobs survive turn aborts; on session shutdown they get SIGTERM, then SIGKILL after a grace period. " +
