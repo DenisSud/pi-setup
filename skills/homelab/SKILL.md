@@ -58,12 +58,12 @@ Host pc.wan
 ### PC Hardware
 - NixOS 26.11 (Zokar), 32GB DDR5, AMD Ryzen 5 9600X (6C/12T)
 - GPU: NVIDIA RTX 5070 (12GB, CUDA 13.2, driver 595.84)
-- OS: Samsung 990 EVO Plus 1TB NVMe. Media: WD40NPZZ 3.6TB NTFS at `/mnt/media` (read-only by default)
+- OS: Samsung 990 EVO Plus 1TB NVMe. Media: 251G ext4 disk image `/home/denis/jellyfin/media.img` mounted at `/home/denis/jellyfin/media` (~49G used, loop device). No external HDD
 - Docker v29.4.2 with NVIDIA Container Toolkit
 - Dev environments: devenv 2.1.2 (system-wide)
 
 ### Network Constraint
-**UDP tracker ports are blocked.** Only HTTP trackers work for torrents. The TorrentClaw HTTP tracker (`http://tracker.torrentclaw.com:6969/announce`) works fine.
+UDP tracker ports were historically blocked (Transmission era). Since switching to qBittorrent (Aug 2026) magnets with UDP-only trackers complete fine — no special handling needed.
 
 ## Services on RPi
 
@@ -74,6 +74,7 @@ Only 2 services run on the RPi:
 - Proxies:
   - `sudakov.site` → static files from `/srv/sudakov-site/`
   - `git.sudakov.site` → `127.0.0.1:3000` (Forgejo HTTP)
+  - `jellyfin.sudakov.site` → `192.168.1.20:8096` (Jellyfin)
 
 ### 2. Forgejo (podman-compose on RPi)
 - Location: `/home/denis/forgejo/`
@@ -102,13 +103,13 @@ podman exec -u git forgejo forgejo admin user list   # List users
 
 ## Services on PC
 
-### Jellyfin — Docker Compose at `~/pc-services/jellyfin/compose.yml`
-- Port: 8096 (no longer proxied via Caddy — accessible on LAN only or via VPN/tunnel)
+### Jellyfin — Docker Compose at `~/jellyfin/compose.yml`
+- Exposed at https://jellyfin.sudakov.site (RPi Caddy reverse_proxy → 192.168.1.20:8096); ports 8096 + 8920
 - GPU transcoding via NVIDIA RTX 5070
-- Mounts: `/mnt/media/Movies:/media/movies:ro`, `/mnt/media/TV:/media/tv:ro`, `/home/denis/Videos/Movies:/media/videos:ro`, `/home/denis/Videos/TV_Shows:/media/tv_shows:ro`
-- API key: `REDACTED_JELLYFIN_API_KEY`
-- Library IDs: Movies `REDACTED_LIBRARY_ID`, TV `REDACTED_LIBRARY_ID`
-- **Russia note:** TheMovieDB is blocked. Use TheTVDB for metadata, Fanart.tv for images.
+- Mount: `./media:/media:ro` (disk image `media.img`) → host `/home/denis/jellyfin/media`; movies at `media/movies/`
+- API key: `REDACTED_JELLYFIN_API_KEY` (only key, named "Jellyseerr"; recover from `config/data/jellyfin.db` `ApiKeys` table if lost)
+- Library: Movies only, ID `REDACTED_LIBRARY_ID`, path `/media/movies` (TV library removed)
+- **Russia note:** TMDB was blocked in Russia; current Movies library fetchers: TheMovieDb + OMDB (`EnableInternetProviders: false`)
 - **Adding mounts** requires `docker compose down && docker compose up -d` (restart isn't enough)
 
 ### Marimo — Docker container on PC
@@ -117,11 +118,10 @@ podman exec -u git forgejo forgejo admin user list   # List users
 - Container name: `marimo`
 - Accessible at `http://192.168.1.20:2718`
 
-### Transmission — system-level daemon on PC
-- User: `denis` (override in `/etc/systemd/system/transmission-daemon.service.d/override.conf`)
-- Download dir: `/home/denis/Downloads/media/` (fast NVMe)
-- Use `sudo systemctl restart transmission-daemon` (NOT `--user`)
-- Quick commands: `transmission-remote -l` (list), `transmission-remote -a 'MAGNET' -w /home/denis/Downloads/media` (add)
+### qBittorrent — desktop app on PC
+- Installed via `modules/user.nix` (`pkgs.qbittorrent`), launched manually (Transmission daemon removed)
+- Downloads land in `~/Videos/Torrents/<Title> [...]/` and `~/Downloads/<Title> [...]/` (save path chosen per download)
+- Add magnets: `qbittorrent 'magnet:?xt=...'` or drag into the GUI; UDP trackers work fine
 
 ### Ollama — DISABLED (2026-07-28)
 - Service is masked. Model data at `/var/lib/ollama/models` remains.
@@ -146,7 +146,7 @@ Response gives `results[].torrents[]` with `magnetUrl`, `infoHash`, `qualityScor
 
 ### TV Shows
 ```
-/mnt/media/TV/Show Name/          ← NO year in folder name
+/home/denis/jellyfin/media/tv/Show Name/   ← NO year in folder name (no TV library configured yet)
 ├── Season 01/                    ← zero-padded
 │   ├── Show Name S01E01 Title.mkv
 │   └── Show Name S01E02 Title.mkv
@@ -156,15 +156,12 @@ Response gives `results[].torrents[]` with `magnetUrl`, `infoHash`, `qualityScor
 
 ### Movies
 ```
-/mnt/media/Movies/Movie Name (year).mkv
+/home/denis/jellyfin/media/movies/Movie Name (year)/Movie Name (year).mkv
 ```
+One subdirectory per movie — matches the existing library layout.
 
 ### Scan trigger
 ```bash
-# Movies
-curl -s -X POST -H 'X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY' \
-  'http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID'
-# TV
 curl -s -X POST -H 'X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY' \
   'http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID'
 ```
@@ -179,51 +176,45 @@ ssh denis@192.168.1.20 "curl -s -G -H 'x-search-source: skill' \
 ```
 Pick highest `qualityScore` torrent. For season packs, `season` matches and `episode` is `null`.
 
-### 2. Add to Transmission
+### 2. Add to qBittorrent
 ```bash
-ssh denis@192.168.1.20 "transmission-remote -a 'MAGNET_URL' -w /home/denis/Downloads/media"
+qbittorrent 'MAGNET_URL'   # or drag into the GUI; default save path ~/Videos/Torrents
 ```
 
 ### 3. Monitor download
-```bash
-ssh denis@192.168.1.20 "transmission-remote -l"
-ssh denis@192.168.1.20 "transmission-remote -t 1 -i | grep -E 'State|Percent|Speed|ETA'"
-```
-- If "Idle" >30s: check tracker status with `-it`, verify HTTP tracker reachable
-- Hard timeout: 3 hours. If incomplete, remove and try next result.
+Watch progress in the qBittorrent GUI. Hard timeout: 3 hours. If incomplete, remove and try the next search result.
 
 ### 4. Organize
-**TV:** Find files → organize on NVMe → batch-copy to external. Season folders zero-padded ("Season 01"), filenames must have SXXEYY. Remove year from show folder.
+**TV:** no TV library yet. When it exists: season folders zero-padded ("Season 01"), filenames must have SXXEYY, no year in show folder.
 
-**Movie:** Copy to `/mnt/media/Movies/Name (year).ext` or `/home/denis/Videos/Movies/` for custom mount.
+**Movie:** copy to `/home/denis/jellyfin/media/movies/Movie Name (year)/` (one subdir per movie, flat `Movie Name (year).ext` inside).
 
 ```bash
 # Find downloaded files
-ssh denis@192.168.1.20 "find /home/denis/Downloads/media/ -type f \( -name '*.mkv' -o -name '*.mp4' \)"
-# Copy to destination
-ssh denis@192.168.1.20 "cp '/home/denis/Downloads/media/path/file.mkv' '/mnt/media/Movies/Movie Name (2025).mkv'"
-# Cleanup
-ssh denis@192.168.1.20 "rm -rf /home/denis/Downloads/media/*"
+find ~/Videos/Torrents ~/Downloads -type f \( -name '*.mkv' -o -name '*.mp4' \)
+# Copy to destination, then verify byte size matches source
+rsync -a "SOURCE.mkv" "/home/denis/jellyfin/media/movies/Movie Name (2025)/Movie Name (2025).mkv"
+# Cleanup (only after the library copy is verified; keep sources of movies not yet added)
+rm -rf ~/Videos/Torrents/*
 ```
 
-### 5. Stop seeding + scan
+### 5. Scan library
 ```bash
-ssh denis@192.168.1.20 "transmission-remote -t ID --stop && transmission-remote -t ID --remove"
-ssh denis@192.168.1.20 'curl -s -X POST -H "X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY" "http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID"'
+curl -s -X POST -H 'X-MediaBrowser-Token: REDACTED_JELLYFIN_API_KEY' \
+  'http://localhost:8096/Library/Refresh?id=REDACTED_LIBRARY_ID'
 ```
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| Torrent stays "Idle" | Re-add with HTTP trackers only; check `curl http://tracker.torrentclaw.com:6969` |
-| "Permission denied" in daemon logs | Re-run Transmission setup; ensure User=denis override |
-| External drive read-only | `sudo mount -o remount,rw /mnt/media` (stop Jellyfin first) |
-| Jellyfin shows 0 series | Switch to TheTVDB in Jellyfin UI (TMDB blocked in Russia) |
+| Torrent stuck | Check tracker status in qBittorrent; UDP trackers work since Aug 2026 |
+| Media image full | `df -h /home/denis/jellyfin/media` — 251G image; when full, grow/recreate `media.img` |
+| Metadata not matching | Current Movies library uses TheMovieDb + OMDB fetchers, internet providers disabled |
 | New mount not visible | Full recreate: `docker compose down && docker compose up -d` |
 | UDP "IPv4 connection failed" | Expected — UDP blocked, HTTP trackers still work |
 | Library scan returns 401 | Check API key `REDACTED_JELLYFIN_API_KEY` |
 | Empty library after scan | Delete and recreate library (empty-dir watcher bug) |
-| `transmission-remote -tr` crashes | Known bug in 4.1.0-beta.2, avoid `-tr` |
+
 | Forgejo SSH "Permission denied" | Check key added via `podman exec -u git forgejo forgejo admin user list` and re-add via API |
 | Forgejo not starting after reboot | Verify `systemctl --user enable podman-restart --now` on RPi; check `podman ps` |
