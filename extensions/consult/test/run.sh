@@ -2,7 +2,7 @@
 # Test runner for the consult extension.
 #
 #   ./test/run.sh harness   — functional tests (fake streams, no network)
-#   ./test/run.sh live      — live test against the real kimi-k3 endpoint
+#   ./test/run.sh live      — live test against the real deepseek-v4-pro endpoint
 #                             (requires CONSULT_KEY; costs real money, ~$0.01)
 #   ./test/run.sh           — both
 set -euo pipefail
@@ -25,7 +25,7 @@ run_harness() {
 
 run_live() {
   [ -n "${CONSULT_KEY:-}" ] || { echo "CONSULT_KEY=sk-... required for the live test" >&2; exit 1; }
-  echo "== live consult test (real kimi-k3, ~\$0.01) =="
+  echo "== live consult test (real deepseek-v4-pro, ~\$0.01) =="
   CONSULT_LIVE=1 node "$EXT_DIR/test/harness.mjs"
 }
 

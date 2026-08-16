@@ -14,7 +14,7 @@
  *   - fake stream (no network)  → answer + reasoning + usage + cost composed
  *   - fake stream provider error → isError result with errorMessage
  *   - fake stream aborted       → "aborted" result
- *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real kimi-k3 call, ~$0.01
+ *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real deepseek-v4-pro call, ~$0.01
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -56,20 +56,20 @@ function assert(cond, msg) {
 
 // ── fixtures ──────────────────────────────────────────────────────────────
 
-const KIMI_K3 = {
-	id: "kimi-k3",
-	name: "Kimi K3",
+const DEEPSEEK_V4_PRO = {
+	id: "deepseek-v4-pro",
+	name: "DeepSeek V4 Pro",
 	api: "openai-completions",
 	provider: "opencode-go",
 	baseUrl: "https://opencode.ai/zen/go/v1",
 	reasoning: true,
-	input: ["text", "image"],
-	cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 0 },
-	contextWindow: 1048576,
+	input: ["text"],
+	cost: { input: 0.435, output: 0.87, cacheRead: 0.003625, cacheWrite: 0 },
+	contextWindow: 1000000,
 	maxTokens: 131072,
 };
 
-function makeRegistry({ provider, model = KIMI_K3, auth = { auth: { apiKey: "sk-test-key" } } }) {
+function makeRegistry({ provider, model = DEEPSEEK_V4_PRO, auth = { auth: { apiKey: "sk-test-key" } } }) {
 	return {
 		getProvider: () => provider,
 		find: () => model,
@@ -78,7 +78,7 @@ function makeRegistry({ provider, model = KIMI_K3, auth = { auth: { apiKey: "sk-
 }
 function fakeProvider(streamFactory) {
 	return {
-		getModels: () => [KIMI_K3],
+		getModels: () => [DEEPSEEK_V4_PRO],
 		streamSimple: (model, context, options) => streamFactory(model, context, options),
 	};
 }
@@ -115,7 +115,7 @@ test("model not found → error lists available models", async () => {
 	const result = await runTool({ proposal: "x", model: "nonexistent-model" }, { registry });
 	assert(result.isError === true, "isError");
 	assert(/nonexistent-model/.test(result.content[0].text), "names the requested model");
-	assert(/kimi-k3/.test(result.content[0].text), "lists available models");
+	assert(/deepseek-v4-pro/.test(result.content[0].text), "lists available models");
 });
 
 test("no auth → clean error", async () => {
@@ -137,7 +137,7 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 		],
 		api: "openai-completions",
 		provider: "opencode-go",
-		model: "kimi-k3",
+		model: "deepseek-v4-pro",
 		usage: { input: 1200, output: 800, cacheRead: 500, cacheWrite: 0, reasoning: 500 },
 		stopReason: "stop",
 		timestamp: Date.now(),
@@ -168,7 +168,7 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 	assert(result.details.reasoning.includes("decoupling"), "reasoning trace present");
 	assert(result.details.usage.input === 1200 && result.details.usage.reasoning === 500, "usage");
 	assert(result.details.usage.cacheRead === 500, "cacheRead usage recorded");
-	const expectedCost = (1200 * 3 + 800 * 15 + 500 * 0.3) / 1e6;
+	const expectedCost = (1200 * 0.435 + 800 * 0.87 + 500 * 0.003625) / 1e6;
 	assert(Math.abs(result.details.costUsd - expectedCost) < 1e-9, `cost ${result.details.costUsd}`);
 	assert(result.details.focus === "risks", "focus recorded");
 	assert(updates.length >= 2, `progress updates streamed (${updates.length})`);
@@ -193,7 +193,7 @@ test("fake stream provider error → isError with errorMessage", async () => {
 				content: [],
 				api: "openai-completions",
 				provider: "opencode-go",
-				model: "kimi-k3",
+				model: "deepseek-v4-pro",
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				stopReason: "error",
 				errorMessage: "Provider returned an error stop reason",
@@ -219,7 +219,7 @@ test("fake stream aborted → aborted result", async () => {
 				content: [],
 				api: "openai-completions",
 				provider: "opencode-go",
-				model: "kimi-k3",
+				model: "deepseek-v4-pro",
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				stopReason: "aborted",
 				timestamp: Date.now(),
@@ -238,7 +238,7 @@ test("fake stream aborted → aborted result", async () => {
 	assert(/aborted/.test(result.content[0].text), `message: ${result.content[0].text}`);
 });
 
-test("live kimi-k3 consult (opt-in)", async () => {
+test("live deepseek-v4-pro consult (opt-in)", async () => {
 	if (!process.env.CONSULT_LIVE) {
 		console.log("  skip  (set CONSULT_LIVE=1 and CONSULT_KEY to run the live test)");
 		return;
