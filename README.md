@@ -11,7 +11,6 @@ Denis's complete [pi](https://pi.dev) setup as a single installable package: ski
 ├── settings.json         # shareable settings (see "Settings" below)
 ├── install.sh            # merges settings.json into ~/.pi/agent/settings.json
 ├── extensions/
-│   ├── bash-background/  # background bash tool override (run_in_background)
 │   └── sysinfo/          # system info injected into the system prompt
 └── skills/
     ├── codebase-design/  # deep-module design vocabulary
