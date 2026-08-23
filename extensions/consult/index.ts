@@ -13,10 +13,10 @@
  * Design:
  *   - The consulted model is fully independent: it sees only the proposal,
  *     context, and question the agent passes. No repo, no session history.
- *   - Calls go through pi's own provider stack (pi-ai): the provider and
- *     model are resolved from the live model registry, auth is resolved the
- *     same way pi resolves it (auth.json / env), and the request itself runs
- *     on pi-ai's real openai-completions streaming path — SSE parsing,
+ *   - Calls go through pi's own provider stack (pi-ai): model and auth are
+ *     resolved from the live model registry facade (ctx.modelRegistry), and
+ *     the request streams through pi-ai's compat entrypoint — which the
+ *     extension loader maps the pi-ai root import to — so SSE parsing,
  *     reasoning_content extraction, and usage accounting are not
  *     reimplemented.
  *   - Live progress is streamed via onUpdate; Esc aborts the request through
@@ -41,6 +41,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SimpleStreamOptions } from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 
 /** Provider hosting the consultant model. */
@@ -219,8 +220,8 @@ async function runConsult(
 	});
 
 	// ── resolve provider + model from pi's live registry ─────────────────
-	const provider = ctx.modelRegistry.getProvider(PROVIDER);
-	if (!provider) {
+	const allModels = ctx.modelRegistry.getAll();
+	if (!allModels.some((m) => m.provider === PROVIDER)) {
 		return errorResult(
 			`consult: provider "${PROVIDER}" is not registered in this pi setup. Check models.json / the model catalog.`,
 		);
@@ -228,9 +229,8 @@ async function runConsult(
 	const requested = params.model ?? DEFAULT_MODEL;
 	const model = ctx.modelRegistry.find(PROVIDER, requested);
 	if (!model) {
-		const available = provider
-			.getModels()
-			.filter((m) => m.input?.includes("text"))
+		const available = allModels
+			.filter((m) => m.provider === PROVIDER && m.input?.includes("text"))
 			.map((m) => m.id)
 			.join(", ");
 		return errorResult(
@@ -239,18 +239,18 @@ async function runConsult(
 	}
 
 	// ── resolve auth the way pi does ─────────────────────────────────────
-	let apiKey: string | undefined;
-	let headers: Record<string, string | null> | undefined;
-	try {
-		const auth = await ctx.modelRegistry.getProviderAuth(PROVIDER);
-		apiKey = auth?.auth?.apiKey;
-		headers = auth?.auth?.headers;
-	} catch (err) {
-		return errorResult(`consult: failed to resolve auth for "${PROVIDER}": ${errMessage(err)}`);
+	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+	if (!auth.ok) {
+		return errorResult(`consult: failed to resolve auth for "${PROVIDER}": ${auth.error}`, {
+			model: model.id,
+			provider: PROVIDER,
+		});
 	}
+	const { apiKey, headers } = auth;
 	if (!apiKey) {
 		return errorResult(
 			`consult: no API key configured for provider "${PROVIDER}". Configure it in auth.json or via the provider login flow.`,
+			{ model: model.id, provider: PROVIDER },
 		);
 	}
 
@@ -289,7 +289,7 @@ async function runConsult(
 
 	// ── stream through pi-ai's real provider path ────────────────────────
 	try {
-		const stream = provider.streamSimple(
+		const stream = streamSimple(
 			cachedModel,
 			{
 				systemPrompt: buildSystemPrompt(),

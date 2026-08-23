@@ -4,8 +4,12 @@
  * Drives the extension's registered tool directly with a stubbed
  * ExtensionAPI + modelRegistry. Streaming goes through pi-ai's REAL
  * openai-completions implementation (EventStream, SSE parsing, usage
- * accounting): the fake provider wraps openAICompletionsApi().streamSimple,
- * so everything except credential storage is the real request path.
+ * accounting): the consult extension streams via pi-ai's compat entrypoint
+ * (the ``streamSimple`` global the extension loader maps the pi-ai root
+ * import to), which dispatches by model.api through the api registry. Fake
+ * tests install a fake api provider for "openai-completions" into that
+ * registry, so everything except credential storage is the real request
+ * path; the live test leaves the registry untouched (builtin provider).
  *
  * Tests:
  *   - provider missing          → clean error
@@ -22,7 +26,7 @@
 
 import createExtension from "../index.ts";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { getApiProvider, registerApiProvider, unregisterApiProviders } from "@earendil-works/pi-ai/compat";
 
 // ── tiny test runner ──────────────────────────────────────────────────────
 
@@ -69,18 +73,45 @@ const DEEPSEEK_V4_PRO = {
 	maxTokens: 131072,
 };
 
-function makeRegistry({ provider, model = DEEPSEEK_V4_PRO, auth = { auth: { apiKey: "sk-test-key" } } }) {
+function makeRegistry({ provider, model = DEEPSEEK_V4_PRO, listed, auth = { ok: true, apiKey: "sk-test-key" } }) {
 	return {
-		getProvider: () => provider,
+		getAll: () => (provider ? (listed ?? (model ? [model] : [DEEPSEEK_V4_PRO])) : []),
 		find: () => model,
-		getProviderAuth: async () => auth,
+		getApiKeyAndHeaders: async () => auth,
 	};
 }
 function fakeProvider(streamFactory) {
 	return {
-		getModels: () => [DEEPSEEK_V4_PRO],
 		streamSimple: (model, context, options) => streamFactory(model, context, options),
 	};
+}
+
+// The extension streams via pi-ai compat's api registry, dispatching on
+// model.api. Fake tests register a fake "openai-completions" provider there
+// (replacing the builtin registration), which is exactly the hook the
+// extension loader exposes to extensions. unregisterApiProviders() removes
+// the entry outright and compat only (re)registers builtins at module load,
+// so uninstalling must restore the captured pre-install provider object
+// (same identity ⇒ the builtin-vs-fake check in compat's dispatch still
+// works).
+const FAKE_SOURCE = "consult-test-fake";
+let savedApiProvider;
+function installFakeApi(streamFactory) {
+	savedApiProvider = getApiProvider("openai-completions");
+	registerApiProvider(
+		{
+			api: "openai-completions",
+			stream: () => {
+				throw new Error("stream() not used by consult");
+			},
+			streamSimple: streamFactory,
+		},
+		FAKE_SOURCE,
+	);
+}
+function uninstallFakeApi() {
+	unregisterApiProviders(FAKE_SOURCE);
+	if (savedApiProvider !== undefined) registerApiProvider(savedApiProvider);
 }
 
 function makePi() {
@@ -121,7 +152,12 @@ test("model not found → error lists available models", async () => {
 test("no auth → clean error", async () => {
 	const result = await runTool(
 		{ proposal: "x" },
-		{ registry: makeRegistry({ provider: fakeProvider(() => {}), auth: null }) },
+		{
+			registry: makeRegistry({
+				provider: fakeProvider(() => {}),
+				auth: { ok: false, error: 'No API key found for "opencode-go"' },
+			}),
+		},
 	);
 	assert(result.isError === true, "isError");
 	assert(/API key/.test(result.content[0].text), `message: ${result.content[0].text}`);
@@ -143,7 +179,7 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 		timestamp: Date.now(),
 	};
 	let captured;
-	const provider = fakeProvider((model, context, options) => {
+	installFakeApi((model, context, options) => {
 		captured = { systemPrompt: context.systemPrompt, userText: context.messages[0].content[0].text, options };
 		const stream = createAssistantMessageEventStream();
 		queueMicrotask(() => {
@@ -157,35 +193,39 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 		return stream;
 	});
 
-	const updates = [];
-	const result = await runTool(
-		{ proposal: "P", context: "C", question: "Q?", focus: "risks", reasoning: "max" },
-		{ registry: makeRegistry({ provider }), onUpdate: (u) => updates.push(u.content[0].text) },
-	);
+	try {
+		const updates = [];
+		const result = await runTool(
+			{ proposal: "P", context: "C", question: "Q?", focus: "risks", reasoning: "max" },
+			{ registry: makeRegistry({ provider: fakeProvider(() => {}) }), onUpdate: (u) => updates.push(u.content[0].text) },
+		);
 
-	assert(result.isError !== true, "not an error");
-	assert(result.content[0].text === "## Verdict\nWorkable with changes.\n\n## Key concerns\n...", "answer text");
-	assert(result.details.reasoning.includes("decoupling"), "reasoning trace present");
-	assert(result.details.usage.input === 1200 && result.details.usage.reasoning === 500, "usage");
-	assert(result.details.usage.cacheRead === 500, "cacheRead usage recorded");
-	const expectedCost = (1200 * 0.435 + 800 * 0.87 + 500 * 0.003625) / 1e6;
-	assert(Math.abs(result.details.costUsd - expectedCost) < 1e-9, `cost ${result.details.costUsd}`);
-	assert(result.details.focus === "risks", "focus recorded");
-	assert(updates.length >= 2, `progress updates streamed (${updates.length})`);
+		assert(result.isError !== true, "not an error");
+		assert(result.content[0].text === "## Verdict\nWorkable with changes.\n\n## Key concerns\n...", "answer text");
+		assert(result.details.reasoning.includes("decoupling"), "reasoning trace present");
+		assert(result.details.usage.input === 1200 && result.details.usage.reasoning === 500, "usage");
+		assert(result.details.usage.cacheRead === 500, "cacheRead usage recorded");
+		const expectedCost = (1200 * 0.435 + 800 * 0.87 + 500 * 0.003625) / 1e6;
+		assert(Math.abs(result.details.costUsd - expectedCost) < 1e-9, `cost ${result.details.costUsd}`);
+		assert(result.details.focus === "risks", "focus recorded");
+		assert(updates.length >= 2, `progress updates streamed (${updates.length})`);
 
-	// system prompt must be fully static (prefix-cache friendly): verdict line, caps, no focus interpolation
-	assert(captured.systemPrompt.includes("VERDICT: sound | workable | wrong"), "parseable verdict line");
-	assert(captured.systemPrompt.includes("under 600 words"), "verbosity cap");
-	assert(captured.systemPrompt.includes("manufacture criticism"), "confidence gating");
-	assert(!captured.systemPrompt.includes("## Focus"), "system prompt has no per-call focus");
-	// focus instruction lives in the user message instead
-	assert(captured.userText.includes("## Focus") && captured.userText.includes("Focus: risks"), "focus in user message");
-	assert(captured.userText.includes("## Proposal") && captured.userText.includes("## Question"), "proposal/question present");
-	assert(captured.options.maxTokens === undefined, `no output cap set, got ${captured.options.maxTokens}`);
+		// system prompt must be fully static (prefix-cache friendly): verdict line, caps, no focus interpolation
+		assert(captured.systemPrompt.includes("VERDICT: sound | workable | wrong"), "parseable verdict line");
+		assert(captured.systemPrompt.includes("under 600 words"), "verbosity cap");
+		assert(captured.systemPrompt.includes("manufacture criticism"), "confidence gating");
+		assert(!captured.systemPrompt.includes("## Focus"), "system prompt has no per-call focus");
+		// focus instruction lives in the user message instead
+		assert(captured.userText.includes("## Focus") && captured.userText.includes("Focus: risks"), "focus in user message");
+		assert(captured.userText.includes("## Proposal") && captured.userText.includes("## Question"), "proposal/question present");
+		assert(captured.options.maxTokens === undefined, `no output cap set, got ${captured.options.maxTokens}`);
+	} finally {
+		uninstallFakeApi();
+	}
 });
 
 test("fake stream provider error → isError with errorMessage", async () => {
-	const provider = fakeProvider(() => {
+	installFakeApi(() => {
 		const stream = createAssistantMessageEventStream();
 		queueMicrotask(() => {
 			const failed = {
@@ -204,14 +244,18 @@ test("fake stream provider error → isError with errorMessage", async () => {
 		});
 		return stream;
 	});
-	const result = await runTool({ proposal: "P" }, { registry: makeRegistry({ provider }) });
-	assert(result.isError === true, "isError");
-	assert(/error stop reason/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	try {
+		const result = await runTool({ proposal: "P" }, { registry: makeRegistry({ provider: fakeProvider(() => {}) }) });
+		assert(result.isError === true, "isError");
+		assert(/error stop reason/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	} finally {
+		uninstallFakeApi();
+	}
 });
 
 test("fake stream aborted → aborted result", async () => {
 	const controller = new AbortController();
-	const provider = fakeProvider(() => {
+	installFakeApi(() => {
 		const stream = createAssistantMessageEventStream();
 		queueMicrotask(() => {
 			const failed = {
@@ -230,12 +274,16 @@ test("fake stream aborted → aborted result", async () => {
 		return stream;
 	});
 	controller.abort();
-	const result = await runTool(
-		{ proposal: "P" },
-		{ registry: makeRegistry({ provider }), signal: controller.signal },
-	);
-	assert(result.isError === true, "isError");
-	assert(/aborted/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	try {
+		const result = await runTool(
+			{ proposal: "P" },
+			{ registry: makeRegistry({ provider: fakeProvider(() => {}) }), signal: controller.signal },
+		);
+		assert(result.isError === true, "isError");
+		assert(/aborted/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	} finally {
+		uninstallFakeApi();
+	}
 });
 
 test("live deepseek-v4-pro consult (opt-in)", async () => {
@@ -245,16 +293,16 @@ test("live deepseek-v4-pro consult (opt-in)", async () => {
 	}
 	const key = process.env.CONSULT_KEY;
 	assert(key, "CONSULT_KEY required for live test");
-	const api = openAICompletionsApi();
-	const provider = fakeProvider((model, context, options) => api.streamSimple(model, context, options));
 	const opts = {
 		proposal:
 			"I plan to train a JEPA world model on 64x64 grid observations with a single shared encoder, no EMA, SIGReg anti-collapse, and an AdaLN-Zero predictor.",
 		question: "Is this architecture sound, and what is the biggest risk?",
 		reasoning: "low",
 	};
-	// call 1: cache miss expected
-	const r1 = await runTool(opts, { registry: makeRegistry({ provider, auth: { auth: { apiKey: key } } }) });
+	// calls the builtin opencode-go provider via pi-ai compat (real SSE path); no fake registered
+	const r1 = await runTool(opts, {
+		registry: makeRegistry({ provider: fakeProvider(() => {}), auth: { ok: true, apiKey: key } }),
+	});
 	assert(r1.isError !== true, `not an error: ${r1.content[0].text}`);
 	assert(r1.content[0].text.length > 50, "substantial answer");
 	assert(r1.details.usage?.input > 0, "usage present");
@@ -265,7 +313,7 @@ test("live deepseek-v4-pro consult (opt-in)", async () => {
 	// call 2: identical static system prompt should hit the prefix cache
 	const r2 = await runTool(
 		{ ...opts, proposal: opts.proposal + " (second pass, different proposal text)" },
-		{ registry: makeRegistry({ provider, auth: { auth: { apiKey: key } } }) },
+		{ registry: makeRegistry({ provider: fakeProvider(() => {}), auth: { ok: true, apiKey: key } }) },
 	);
 	assert(r2.isError !== true, `2nd call not an error: ${r2.content[0].text}`);
 	console.log(
