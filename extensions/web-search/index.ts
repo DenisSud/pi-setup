@@ -20,10 +20,17 @@
  * Both resolve through ctx.modelRegistry.getProviderAuth("ollama-web") —
  * the same auth path pi uses for real providers (verified: stored
  * credential wins, env is the fallback; see pi-ai auth/helpers.js).
+ *
+ * ptc: `web_search` is also registered for programmatic calling
+ * (extensions/ptc) — search fan-out is the benchmark-proven fit for running
+ * tool calls in code. The ptc binding returns the structured results
+ * ({ query, results: [{title,url,content}] }); the direct tool returns the
+ * formatted prose.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { registerPtcTool } from "../ptc/registry.ts";
 
 /** Pseudo-provider id the Ollama API key is stored under. */
 export const OLLAMA_AUTH_PROVIDER = "ollama-web";
@@ -49,6 +56,66 @@ type OllamaError = { error?: string };
 function errMessage(err: unknown): string {
 	if (err instanceof Error) return err.message;
 	return String(err);
+}
+
+/** Minimal model-registry surface the search core needs (satisfied by pi's ctx). */
+interface SearchCtx {
+	modelRegistry: {
+		getProviderAuth(id: string): Promise<{ auth?: { apiKey?: string } } | undefined>;
+	};
+}
+
+/**
+ * Shared search core: resolve auth, call the API, return structured results.
+ * Throws Error with a clean, actionable message on any failure (used both by
+ * the direct tool's errorResult and as a rejected promise inside ptc programs).
+ */
+async function ollamaSearch(query: string, maxResults: number, signal: AbortSignal | undefined, ctx: unknown): Promise<SearchResult[]> {
+	const searchCtx = ctx as SearchCtx;
+	let apiKey: string | undefined;
+	try {
+		const auth = await searchCtx.modelRegistry.getProviderAuth(OLLAMA_AUTH_PROVIDER);
+		apiKey = auth?.auth?.apiKey;
+	} catch (err) {
+		throw new Error(`web_search: failed to resolve the Ollama API key: ${errMessage(err)}`);
+	}
+	if (!apiKey) {
+		throw new Error(
+			`web_search: no Ollama API key configured. Either set the OLLAMA_API_KEY environment variable, ` +
+				`or add an "${OLLAMA_AUTH_PROVIDER}" entry to ~/.pi/agent/auth.json: ` +
+				`{"${OLLAMA_AUTH_PROVIDER}": {"type": "api_key", "key": "<key from https://ollama.com/settings/keys>"}}.`,
+		);
+	}
+
+	let data: { results: SearchResult[] };
+	try {
+		const response = await fetch(`${API_BASE}/web_search`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${apiKey}`,
+			},
+			body: JSON.stringify({ query, max_results: maxResults }),
+			signal,
+		});
+		if (!response.ok) {
+			const errText = (await response.text().catch(() => "")).slice(0, 500);
+			if (response.status === 401) {
+				throw new Error(
+					`web_search: unauthorized (401) — the Ollama API key is missing or invalid. ` +
+						`Create one at https://ollama.com/settings/keys and update the ` +
+						`"${OLLAMA_AUTH_PROVIDER}" entry in ~/.pi/agent/auth.json or OLLAMA_API_KEY.`,
+				);
+			}
+			throw new Error(`web_search: API error (status ${response.status}): ${errText || response.statusText}`);
+		}
+		data = (await response.json()) as { results: SearchResult[] };
+	} catch (err) {
+		if (signal?.aborted) throw new Error("web_search: aborted.");
+		if (err instanceof Error && err.message.startsWith("web_search:")) throw err; // already formatted
+		throw new Error(`web_search: request failed: ${errMessage(err)}`);
+	}
+	return data.results ?? [];
 }
 
 export default function webSearchExtension(pi: ExtensionAPI) {
@@ -87,54 +154,13 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 
 			const maxResults = Math.min(MAX_RESULTS_LIMIT, Math.max(1, Math.round(params.max_results ?? 5)));
 
-			// ── resolve the API key the way pi resolves provider auth ───────
-			let apiKey: string | undefined;
+			let results: SearchResult[];
 			try {
-				const auth = await ctx.modelRegistry.getProviderAuth(OLLAMA_AUTH_PROVIDER);
-				apiKey = auth?.auth?.apiKey;
+				results = await ollamaSearch(params.query, maxResults, signal, ctx);
 			} catch (err) {
-				return errorResult(`web_search: failed to resolve the Ollama API key: ${errMessage(err)}`);
-			}
-			if (!apiKey) {
-				return errorResult(
-					`web_search: no Ollama API key configured. Either set the OLLAMA_API_KEY environment variable, ` +
-						`or add an "${OLLAMA_AUTH_PROVIDER}" entry to ~/.pi/agent/auth.json: ` +
-						`{"${OLLAMA_AUTH_PROVIDER}": {"type": "api_key", "key": "<key from https://ollama.com/settings/keys>"}}.`,
-				);
+				return errorResult(errMessage(err));
 			}
 
-			// ── call the web search API ─────────────────────────────────────
-			let data: { results: SearchResult[] };
-			try {
-				const response = await fetch(`${API_BASE}/web_search`, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${apiKey}`,
-					},
-					body: JSON.stringify({ query: params.query, max_results: maxResults }),
-					signal,
-				});
-				if (!response.ok) {
-					const errText = (await response.text().catch(() => "")).slice(0, 500);
-					if (response.status === 401) {
-						return errorResult(
-							`web_search: unauthorized (401) — the Ollama API key is missing or invalid. ` +
-								`Create one at https://ollama.com/settings/keys and update the ` +
-								`"${OLLAMA_AUTH_PROVIDER}" entry in ~/.pi/agent/auth.json or OLLAMA_API_KEY.`,
-						);
-					}
-					return errorResult(
-						`web_search: API error (status ${response.status}): ${errText || response.statusText}`,
-					);
-				}
-				data = (await response.json()) as { results: SearchResult[] };
-			} catch (err) {
-				if (signal?.aborted) return errorResult("web_search: aborted.");
-				return errorResult(`web_search: request failed: ${errMessage(err)}`);
-			}
-
-			const results = data.results ?? [];
 			const formatted =
 				results
 					.map((r, i) => `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.content}`)
@@ -150,6 +176,21 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			};
 		},
 	});
+
+	// ptc binding: structured results for search fan-out inside programs.
+	// Signature documents the binding contract; behavior docs stay in the
+	// web_search tool description (single source of truth).
+	registerPtcTool(
+		"web_search",
+		async (args, ctx) => {
+			const query = String(args.query ?? "");
+			if (!query) throw new Error("web_search: query is required");
+			const maxResults = Math.min(MAX_RESULTS_LIMIT, Math.max(1, Math.round(Number(args.max_results ?? 5))));
+			const results = await ollamaSearch(query, maxResults, undefined, ctx);
+			return { query, results };
+		},
+		{ signature: "{ query, max_results? } → { query, results: {title,url,content}[] }" },
+	);
 
 	pi.registerTool({
 		name: "web_fetch",
