@@ -14,7 +14,15 @@ STORE="$(dirname "$(readlink -f "$(command -v pi)")")/../lib/node_modules/pi-mon
 
 setup_symlinks() {
   mkdir -p "$EXT_DIR/node_modules/@earendil-works"
-  ln -sfn "$STORE/node_modules/@earendil-works/pi-coding-agent" "$EXT_DIR/node_modules/@earendil-works/pi-coding-agent"
+  # The pi-coding-agent package IS the monorepo root (not a subdir of its
+  # own node_modules) in older store layouts; newer layouts ship it under
+  # node_modules. Prefer the subdir, fall back to the store root.
+  if [ -d "$STORE/node_modules/@earendil-works/pi-coding-agent" ]; then
+    ln -sfn "$STORE/node_modules/@earendil-works/pi-coding-agent" "$EXT_DIR/node_modules/@earendil-works/pi-coding-agent"
+  else
+    ln -sfn "$STORE" "$EXT_DIR/node_modules/@earendil-works/pi-coding-agent"
+  fi
+  ln -sfn "$STORE/node_modules/@earendil-works/pi-tui" "$EXT_DIR/node_modules/@earendil-works/pi-tui"
   ln -sfn "$STORE/node_modules/typebox" "$EXT_DIR/node_modules/typebox"
 }
 

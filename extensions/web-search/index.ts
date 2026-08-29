@@ -11,17 +11,23 @@
  * daemon's experimental endpoints) — this extension works on any machine,
  * no daemon required.
  *
- * Auth: the extension registers an `ollama-web` pseudo-provider (zero
- * models — never shows up in model pickers) with the standard pi-ai api-key
- * auth. Resolution order is pi's built-in one:
- *   1. stored credential: "ollama-web" entry in ~/.pi/agent/auth.json,
- *      e.g. "ollama-web": { "type": "api_key", "key": "<key>" }
- *   2. environment: OLLAMA_API_KEY
- * Both resolve through ctx.modelRegistry.getApiKeyForProvider("ollama-web") —
- * the same auth path pi uses for real providers (verified: stored
- * credential wins, env is the fallback; see pi-ai auth/helpers.js).
- * (getProviderAuth was removed from the ModelRegistry facade in
- * pi 0.80.x; getApiKeyForProvider wraps runtime.getAuth().auth.apiKey.)
+ * Auth: the key is resolved fresh on EVERY call (resolveOllamaApiKey()):
+ *   1. "ollama-web" entry in ~/.pi/agent/auth.json, read from disk via pi's
+ *      readStoredCredential(). pi's ModelRegistry snapshots auth.json once
+ *      at startup (AuthStorage.reload() runs only in the constructor), so
+ *      keys added or rotated mid-session are invisible to
+ *      getApiKeyForProvider — and a registered $OLLAMA_API_KEY env fallback
+ *      then silently resolves a stale env key (the 401 bug this fixed).
+ *      The fresh read keeps credential edits live without a session restart.
+ *   2. OLLAMA_API_KEY environment variable (via ctx.modelRegistry, which
+ *      also honors runtime key overrides).
+ * An `ollama-web` pseudo-provider (zero models — never in model pickers) is
+ * still registered so pi shows the provider as configured when only the env
+ * var is set; the tools never go through it for resolution.
+ *
+ * TUI: renderCall shows the query/url while running; renderResult shows a
+ * one-line summary when collapsed and the full results when expanded
+ * (ctrl+e toggles).
  *
  * ptc: `web_search` is also registered for programmatic calling
  * (extensions/ptc) — search fan-out is the benchmark-proven fit for running
@@ -30,7 +36,8 @@
  * formatted prose.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readStoredCredential, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { registerPtcTool } from "../ptc/registry.ts";
 
@@ -60,12 +67,36 @@ function errMessage(err: unknown): string {
 	return String(err);
 }
 
-/** Minimal model-registry surface the search core needs (satisfied by pi's ctx). */
+/** Minimal model-registry surface the fallback path needs (satisfied by pi's ctx). */
 interface SearchCtx {
-	modelRegistry: {
+	modelRegistry?: {
 		getApiKeyForProvider(id: string): Promise<string | undefined>;
 	};
 }
+
+/**
+ * Resolve the Ollama API key for one call: fresh auth.json read first (see
+ * header — pi's registry snapshots auth.json at startup, so mid-session key
+ * edits are invisible to getApiKeyForProvider), then pi's standard
+ * resolution (env fallback via OLLAMA_API_KEY, runtime overrides). Never
+ * throws: an unreadable/missing auth.json falls through to the registry.
+ * Template values ("!cmd", "$VAR") in the stored key are skipped here so
+ * pi's resolver handles them.
+ */
+async function resolveOllamaApiKey(ctx: SearchCtx | undefined): Promise<string | undefined> {
+	const stored = readStoredCredential(OLLAMA_AUTH_PROVIDER);
+	if (stored?.type === "api_key" && stored.key && !stored.key.startsWith("!") && !stored.key.includes("$")) {
+		return stored.key;
+	}
+	return (await ctx?.modelRegistry?.getApiKeyForProvider(OLLAMA_AUTH_PROVIDER)) ?? undefined;
+}
+
+const UNAUTHORIZED_HINT =
+	`Create one at https://ollama.com/settings/keys and update the ` +
+	`"${OLLAMA_AUTH_PROVIDER}" entry in ~/.pi/agent/auth.json (applies ` +
+	`immediately, no restart needed). If OLLAMA_API_KEY is set in your ` +
+	`shell, make sure it is current — it is the fallback when no stored ` +
+	`entry exists.`;
 
 /**
  * Shared search core: resolve auth, call the API, return structured results.
@@ -73,10 +104,9 @@ interface SearchCtx {
  * the direct tool's errorResult and as a rejected promise inside ptc programs).
  */
 async function ollamaSearch(query: string, maxResults: number, signal: AbortSignal | undefined, ctx: unknown): Promise<SearchResult[]> {
-	const searchCtx = ctx as SearchCtx;
 	let apiKey: string | undefined;
 	try {
-		apiKey = await searchCtx.modelRegistry.getApiKeyForProvider(OLLAMA_AUTH_PROVIDER);
+		apiKey = await resolveOllamaApiKey(ctx as SearchCtx | undefined);
 	} catch (err) {
 		throw new Error(`web_search: failed to resolve the Ollama API key: ${errMessage(err)}`);
 	}
@@ -102,11 +132,7 @@ async function ollamaSearch(query: string, maxResults: number, signal: AbortSign
 		if (!response.ok) {
 			const errText = (await response.text().catch(() => "")).slice(0, 500);
 			if (response.status === 401) {
-				throw new Error(
-					`web_search: unauthorized (401) — the Ollama API key is missing or invalid. ` +
-						`Create one at https://ollama.com/settings/keys and update the ` +
-						`"${OLLAMA_AUTH_PROVIDER}" entry in ~/.pi/agent/auth.json or OLLAMA_API_KEY.`,
-				);
+				throw new Error(`web_search: unauthorized (401) — the Ollama API key is missing or invalid. ${UNAUTHORIZED_HINT}`);
 			}
 			throw new Error(`web_search: API error (status ${response.status}): ${errText || response.statusText}`);
 		}
@@ -119,11 +145,16 @@ async function ollamaSearch(query: string, maxResults: number, signal: AbortSign
 	return data.results ?? [];
 }
 
+/** Truncate for collapsed one-line display. */
+function truncate(text: string, max: number): string {
+	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 export default function webSearchExtension(pi: ExtensionAPI) {
-	// Register the auth-only pseudo-provider so getApiKeyForProvider("ollama-web")
-	// resolves the key the standard way (stored credential → env fallback).
-	// `api`/`baseUrl` are required by the config form but never used: the
-	// provider declares no models, so it can't be selected for chat.
+	// Register the auth-only pseudo-provider so pi shows "ollama-web" as
+	// configured when only OLLAMA_API_KEY is set. `api`/`baseUrl` are required
+	// by the config form but never used: the provider declares no models, so
+	// it can't be selected for chat, and the tools resolve the key themselves.
 	pi.registerProvider(OLLAMA_AUTH_PROVIDER, {
 		name: "Ollama (web search)",
 		api: "openai-completions",
@@ -146,6 +177,42 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 				}),
 			),
 		}),
+		renderCall(args, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			let content = theme.fg("toolTitle", theme.bold("Web Search "));
+			content += theme.fg("accent", `"${truncate(args.query ?? "", 80)}"`);
+			if (args.max_results !== undefined) content += theme.fg("dim", ` (max ${args.max_results})`);
+			text.setText(content);
+			return text;
+		},
+		renderResult(result, { expanded, isPartial }, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			const details = result.details as
+				| { query?: string; resultCount?: number; results?: SearchResult[] }
+				| undefined;
+
+			if (isPartial) {
+				text.setText(theme.fg("warning", `Searching the web for "${truncate(details?.query ?? "", 80)}"…`));
+				return text;
+			}
+			if (result.isError) {
+				text.setText(theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_search failed"));
+				return text;
+			}
+
+			const count = details?.resultCount ?? 0;
+			let content = theme.fg("success", "✓ ") + theme.fg("toolTitle", `${count} result${count === 1 ? "" : "s"}`);
+			content += theme.fg("dim", ` for "${truncate(details?.query ?? "", 80)}"`);
+			if (!expanded || !details?.results?.length) {
+				text.setText(content);
+				return text;
+			}
+			for (const r of details.results) {
+				content += `\n  ${theme.fg("accent", r.title)}\n  ${theme.fg("dim", r.url)}\n  ${theme.fg("default", truncate(r.content.replace(/\n/g, " "), 200))}`;
+			}
+			text.setText(content);
+			return text;
+		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const errorResult = (text: string): {
 				content: { type: "text"; text: string }[];
@@ -201,6 +268,43 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 		parameters: Type.Object({
 			url: Type.String({ description: "URL to fetch and extract content from" }),
 		}),
+		renderCall(args, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			let content = theme.fg("toolTitle", theme.bold("Web Fetch "));
+			content += theme.fg("accent", truncate(args.url ?? "", 100));
+			text.setText(content);
+			return text;
+		},
+		renderResult(result, { expanded, isPartial }, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			const details = result.details as { url?: string; title?: string; content?: string; links?: string[] } | undefined;
+
+			if (isPartial) {
+				text.setText(theme.fg("warning", `Fetching ${truncate(details?.url ?? "", 80)}…`));
+				return text;
+			}
+			if (result.isError) {
+				text.setText(theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_fetch failed"));
+				return text;
+			}
+
+			const linkCount = details?.links?.length ?? 0;
+			let content = theme.fg("success", "✓ ") + theme.fg("toolTitle", details?.title || "Fetched page");
+			content += theme.fg("dim", ` — ${linkCount} link${linkCount === 1 ? "" : "s"}`);
+			if (!expanded || !details?.content) {
+				text.setText(content);
+				return text;
+			}
+			content += `\n  ${theme.fg("default", details.content)}`;
+			if (details.links?.length) {
+				content += `\n  ${theme.fg("dim", "Links:")}`;
+				for (const link of details.links.slice(0, 10)) {
+					content += `\n    ${theme.fg("dim", "- " + link)}`;
+				}
+			}
+			text.setText(content);
+			return text;
+		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const errorResult = (text: string): {
 				content: { type: "text"; text: string }[];
@@ -208,10 +312,10 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 				isError: true;
 			} => ({ content: [{ type: "text", text }], details: {} as Record<string, never>, isError: true });
 
-			// ── resolve the API key the way pi resolves provider auth ───────
+			// ── resolve the API key (fresh auth.json read, env fallback) ────
 			let apiKey: string | undefined;
 			try {
-				apiKey = await ctx.modelRegistry.getApiKeyForProvider(OLLAMA_AUTH_PROVIDER);
+				apiKey = await resolveOllamaApiKey(ctx);
 			} catch (err) {
 				return errorResult(`web_fetch: failed to resolve the Ollama API key: ${errMessage(err)}`);
 			}
@@ -244,11 +348,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 						// non-JSON error body — fall through
 					}
 					if (response.status === 401) {
-						return errorResult(
-							`web_fetch: unauthorized (401) — the Ollama API key is missing or invalid. ` +
-								`Create one at https://ollama.com/settings/keys and update the ` +
-								`"${OLLAMA_AUTH_PROVIDER}" entry in ~/.pi/agent/auth.json or OLLAMA_API_KEY.`,
-						);
+						return errorResult(`web_fetch: unauthorized (401) — the Ollama API key is missing or invalid. ${UNAUTHORIZED_HINT}`);
 					}
 					return errorResult(
 						`web_fetch: API error (status ${response.status}): ${apiError || response.statusText}`,

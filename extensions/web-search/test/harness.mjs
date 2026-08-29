@@ -24,7 +24,19 @@
  * Requires node_modules symlinks set up by run.sh.
  */
 
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import createExtension, { OLLAMA_AUTH_PROVIDER } from "../index.ts";
+
+// ── isolated agent dir ──────────────────────────────────────────────────
+// The extension reads ~/.pi/agent/auth.json fresh on every call (the auth
+// fix). PI_CODING_AGENT_DIR redirects getAgentDir() to a temp dir so tests
+// never touch the real credentials and can simulate mid-session auth edits.
+const AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-web-search-test-"));
+process.env.PI_CODING_AGENT_DIR = AGENT_DIR;
+const AUTH_PATH = join(AGENT_DIR, "auth.json");
+process.on("exit", () => rmSync(AGENT_DIR, { recursive: true, force: true }));
 
 // ── tiny test runner ──────────────────────────────────────────────────────
 
@@ -81,6 +93,12 @@ function makeRegistry({ auth = "test-key", authError } = {}) {
 }
 
 const REAL_FETCH = globalThis.fetch;
+const SAMPLE_RESULTS = {
+	results: [
+		{ title: "First", url: "https://example.com/1", content: "First content" },
+		{ title: "Second", url: "https://example.com/2", content: "Second content" },
+	],
+};
 function mockFetch(handler) {
 	globalThis.fetch = async (input, init) => handler(String(input), init);
 }
@@ -119,7 +137,7 @@ async function runTool(tool, params, { registry, signal } = {}) {
 // ── auth ──────────────────────────────────────────────────────────────────
 
 test("no auth → clean error with setup instructions", async () => {
-	const result = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: undefined }) });
+	const result = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
 	assert(result.isError === true, "isError");
 	assert(/OLLAMA_API_KEY/.test(result.content[0].text), "mentions env var");
 	assert(/ollama-web/.test(result.content[0].text), "mentions auth.json provider id");
@@ -136,14 +154,65 @@ test("auth resolution throws → clean error", async () => {
 	assert(/credential store read failed/.test(result.content[0].text), "includes cause");
 });
 
+// ── fresh auth.json reads (the 401 regression: pi snapshots auth.json at
+//    startup, so mid-session key edits must be picked up per call) ────────
+
+function writeAuth(key) {
+	writeFileSync(AUTH_PATH, JSON.stringify({ [OLLAMA_AUTH_PROVIDER]: { type: "api_key", key } }));
+}
+
+test("key added to auth.json mid-session works without restart", async () => {
+	let captured;
+	mockFetch(async (_url, init) => {
+		captured = { init };
+		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
+	});
+	try {
+		// session started before the key existed: registry snapshot has nothing
+		const before = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
+		assert(before.isError === true, "no key anywhere → clean error");
+
+		writeAuth("fresh-key");
+		const after = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
+		assert(after.isError !== true, `works without restart: ${after.content[0].text}`);
+		assert(captured.init.headers.Authorization === "Bearer fresh-key", "fresh key used");
+	} finally {
+		rmSync(AUTH_PATH, { force: true });
+	}
+});
+
+test("rotated auth.json key wins over stale registry snapshot", async () => {
+	let captured;
+	mockFetch(async (_url, init) => {
+		captured = { init };
+		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
+	});
+	try {
+		writeAuth("rotated-key");
+		await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "stale-key" }) });
+		assert(captured.init.headers.Authorization === "Bearer rotated-key", "rotated key beats registry snapshot");
+	} finally {
+		rmSync(AUTH_PATH, { force: true });
+	}
+});
+
+test("template keys in auth.json are skipped — registry resolves them", async () => {
+	let captured;
+	mockFetch(async (_url, init) => {
+		captured = { init };
+		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
+	});
+	try {
+		writeAuth("$OLLAMA_API_KEY");
+		await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "registry-key" }) });
+		assert(captured.init.headers.Authorization === "Bearer registry-key", "registry path used for templates");
+	} finally {
+		rmSync(AUTH_PATH, { force: true });
+	}
+});
+
 // ── web_search ────────────────────────────────────────────────────────────
 
-const SAMPLE_RESULTS = {
-	results: [
-		{ title: "First", url: "https://example.com/1", content: "First content" },
-		{ title: "Second", url: "https://example.com/2", content: "Second content" },
-	],
-};
 
 test("search success → formatted results + details", async () => {
 	let captured;
