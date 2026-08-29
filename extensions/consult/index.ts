@@ -255,16 +255,9 @@ async function runConsult(
 	}
 
 	// ── prompt caching ──────────────────────────────────────────────────
-	// The system prompt is static, and with cacheControlFormat: "anthropic"
-	// pi-ai marks it with cache_control so the endpoint caches the prefix
-	// across consults (cacheRead $0.004/MTok vs $0.44/MTok input). The catalog
-	// does not declare cacheControlFormat for kimi-k3, so opt in by
-	// cloning the model; if a future catalog entry declares it, use the model
-	// as-is.
-	const cachedModel = model.compat?.cacheControlFormat
-		? model
-		: { ...model, compat: { ...(model.compat ?? {}), cacheControlFormat: "anthropic" } };
-
+	// Only opt into cacheControlFormat if the model's catalog compat declares
+	// it. Forcing "anthropic" breaks providers (e.g. Console Go / kimi-k3)
+	// that reject the cache_control parameter outright.
 	// ── build the consult prompt ─────────────────────────────────────────
 	const reasoning = (params.reasoning ?? "high") as "low" | "high" | "max";
 	const streamOptions: SimpleStreamOptions = {
@@ -290,7 +283,7 @@ async function runConsult(
 	// ── stream through pi-ai's real provider path ────────────────────────
 	try {
 		const stream = streamSimple(
-			cachedModel,
+			model,
 			{
 				systemPrompt: buildSystemPrompt(),
 				messages: [
