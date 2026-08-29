@@ -70,9 +70,9 @@ function makePi() {
 	};
 }
 
-function makeRegistry({ auth = { auth: { apiKey: "test-key" } }, authError } = {}) {
+function makeRegistry({ auth = "test-key", authError } = {}) {
 	return {
-		getProviderAuth: async (id) => {
+		getApiKeyForProvider: async (id) => {
 			if (authError) throw authError;
 			if (id === OLLAMA_AUTH_PROVIDER) return auth;
 			return undefined;
@@ -298,7 +298,7 @@ test("live ollama.com search + fetch (opt-in)", async () => {
 	}
 	const key = process.env.WEB_SEARCH_KEY;
 	assert(key, "WEB_SEARCH_KEY required for live test");
-	const registry = makeRegistry({ auth: { auth: { apiKey: key } } });
+	const registry = makeRegistry({ auth: key });
 
 	const s = await runTool(search, { query: "ollama web search api", max_results: 3 }, { registry });
 	assert(s.isError !== true, `search not an error: ${s.content[0].text}`);

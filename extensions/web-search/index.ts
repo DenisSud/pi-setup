@@ -17,9 +17,11 @@
  *   1. stored credential: "ollama-web" entry in ~/.pi/agent/auth.json,
  *      e.g. "ollama-web": { "type": "api_key", "key": "<key>" }
  *   2. environment: OLLAMA_API_KEY
- * Both resolve through ctx.modelRegistry.getProviderAuth("ollama-web") —
+ * Both resolve through ctx.modelRegistry.getApiKeyForProvider("ollama-web") —
  * the same auth path pi uses for real providers (verified: stored
  * credential wins, env is the fallback; see pi-ai auth/helpers.js).
+ * (getProviderAuth was removed from the ModelRegistry facade in
+ * pi 0.80.x; getApiKeyForProvider wraps runtime.getAuth().auth.apiKey.)
  *
  * ptc: `web_search` is also registered for programmatic calling
  * (extensions/ptc) — search fan-out is the benchmark-proven fit for running
@@ -61,7 +63,7 @@ function errMessage(err: unknown): string {
 /** Minimal model-registry surface the search core needs (satisfied by pi's ctx). */
 interface SearchCtx {
 	modelRegistry: {
-		getProviderAuth(id: string): Promise<{ auth?: { apiKey?: string } } | undefined>;
+		getApiKeyForProvider(id: string): Promise<string | undefined>;
 	};
 }
 
@@ -74,8 +76,7 @@ async function ollamaSearch(query: string, maxResults: number, signal: AbortSign
 	const searchCtx = ctx as SearchCtx;
 	let apiKey: string | undefined;
 	try {
-		const auth = await searchCtx.modelRegistry.getProviderAuth(OLLAMA_AUTH_PROVIDER);
-		apiKey = auth?.auth?.apiKey;
+		apiKey = await searchCtx.modelRegistry.getApiKeyForProvider(OLLAMA_AUTH_PROVIDER);
 	} catch (err) {
 		throw new Error(`web_search: failed to resolve the Ollama API key: ${errMessage(err)}`);
 	}
@@ -119,7 +120,7 @@ async function ollamaSearch(query: string, maxResults: number, signal: AbortSign
 }
 
 export default function webSearchExtension(pi: ExtensionAPI) {
-	// Register the auth-only pseudo-provider so getProviderAuth("ollama-web")
+	// Register the auth-only pseudo-provider so getApiKeyForProvider("ollama-web")
 	// resolves the key the standard way (stored credential → env fallback).
 	// `api`/`baseUrl` are required by the config form but never used: the
 	// provider declares no models, so it can't be selected for chat.
@@ -210,8 +211,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			// ── resolve the API key the way pi resolves provider auth ───────
 			let apiKey: string | undefined;
 			try {
-				const auth = await ctx.modelRegistry.getProviderAuth(OLLAMA_AUTH_PROVIDER);
-				apiKey = auth?.auth?.apiKey;
+				apiKey = await ctx.modelRegistry.getApiKeyForProvider(OLLAMA_AUTH_PROVIDER);
 			} catch (err) {
 				return errorResult(`web_fetch: failed to resolve the Ollama API key: ${errMessage(err)}`);
 			}
