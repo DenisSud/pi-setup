@@ -32,6 +32,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { format } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { getPtcTool, listPtcTools } from "./registry.ts";
 import "./builtin.ts";
@@ -276,6 +277,21 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			promptGuidelines: [
 				"Use ptc when a task needs many tool calls whose results can be filtered or aggregated in code (search fan-out, batch lookups, large result sets); use direct tool calls for single lookups and steps that need judgment between calls.",
 			],
+			renderCall(args, theme, context) {
+				const code = typeof args.code === "string" ? args.code : "";
+				if (!context.expanded || !code.trim()) {
+					// Collapsed: one-line preview of the first meaningful line.
+					const first = code.split("\n").find((l) => l.trim()) ?? "";
+					const preview = first.length > 80 ? `${first.slice(0, 80)}…` : first;
+					return new Text(theme.fg("toolTitle", theme.bold("ptc ")) + theme.fg("dim", preview), 0, 0);
+				}
+				// Expanded: show the full program.
+				let text = theme.fg("toolTitle", theme.bold("ptc"));
+				for (const line of code.split("\n")) {
+					text += `\n${theme.fg("toolOutput", line)}`;
+				}
+				return new Text(text, 0, 0);
+			},
 			parameters: Type.Object({
 				code: Type.String({
 					description:
