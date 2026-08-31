@@ -113,7 +113,11 @@ test("session_start: description lists every registered tool", async () => {
 		assert(desc.includes(name), `description mentions ${name}`);
 	}
 	assert(desc.includes("console.log"), "description states output convention");
-	assert(desc.includes("direct tool calls"), "description states when to prefer direct calls");
+	assert(desc.includes("general-purpose"), "description positions ptc as general-purpose JS");
+	assert(
+		ptc.promptGuidelines.some((g) => g.includes("direct tool calls")),
+		"guidelines state when to prefer direct tool calls",
+	);
 });
 
 test("fan-out: Promise.all reads two files, program aggregates", async () => {
