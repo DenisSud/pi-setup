@@ -253,12 +253,12 @@ function buildDescription(names: string[]): string {
 				.join("\n")}\n`
 		: "";
 	return [
-		"Run a JavaScript program (top-level await) that calls tools as async functions; the program's printed output (console.log / print) is the result. Intermediate tool results never enter context — filter and aggregate them in code.",
+		"Run a JavaScript program (top-level await) in a Node child process — general-purpose code, not just tool orchestration. The program's printed output (console.log / print) is the result; intermediate tool results never enter context.",
 		"",
+		"Tools are available as global async functions with their exact names; each call resolves to the tool's result (structured JSON for the built-ins). This makes ptc ideal for fan-out, filtering, and aggregation across many tool calls.",,
 		builtinsBlock,
 		othersBlock,
-		"Errors from tools reject the awaited promise — handle or retry them in code. Parallel calls with Promise.all.",
-		"Prefer ptc for fan-out, filtering, or many calls; use direct tool calls for single lookups and steps that need judgment between calls.",
+		"Everything else is ordinary Node: import builtins (node:fs, node:child_process, …), compute, parse, even run shell commands when that fits. Parallel tool calls with Promise.all; tool errors reject the awaited promise — handle or retry them in code.",
 	]
 		.filter((s) => s !== undefined)
 		.join("\n")
@@ -273,9 +273,10 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			name: "ptc",
 			label: "PTC",
 			description: buildDescription(names),
-			promptSnippet: "Run a JS program that calls tools as async functions (fan-out / filter / aggregate in code)",
+			promptSnippet:
+				"Run a JS program (top-level await) in a Node child process — general-purpose code plus tools as async functions",
 			promptGuidelines: [
-				"Use ptc when a task needs many tool calls whose results can be filtered or aggregated in code (search fan-out, batch lookups, large result sets); use direct tool calls for single lookups and steps that need judgment between calls.",
+				"ptc runs arbitrary JS in a Node child process (top-level await) — it is not limited to tool orchestration: import Node builtins, compute, parse data, write scripts, even spawn shell when it fits. Tools are additionally available as global async functions, which makes ptc the tool of choice when many tool calls can be filtered or aggregated in code; use direct tool calls for single lookups and steps that need judgment between calls.",
 			],
 			renderCall(args, theme, context) {
 				const code = typeof args.code === "string" ? args.code : "";
