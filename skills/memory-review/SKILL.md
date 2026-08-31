@@ -1,27 +1,27 @@
 ---
 name: memory-review
 description: |
-  Periodic consolidation review of Denis's memory repository
+  Periodic consolidation of Denis's memory repository
   (~/.pi/agent/memory). Reviews recently-changed notes for staleness,
-  contradictions, and index drift, then writes a human-gated proposal file.
-  Produces proposals only — never edits the memory repo directly.
-  Use when: running a memory review (weekly cron `memory-review` or on-demand
+  contradictions, and index drift, then applies the fixes directly:
+  edits, commits, and pushes. Writes an audit report. Use when: running a
+  memory review (weekly cron `memory-review` or on-demand
   "memory review" request).
 ---
 
 # Memory Review
 
-Review the memory repository and produce a proposal file. **You never edit,
-create, or delete anything inside the memory repo itself** — the human applies
-proposals.
+Review the memory repository, apply safe fixes directly, commit, and push.
+**You never touch `SOUL.md`** (human-authored) and never delete notes without
+a supersession reason.
 
 ## Setup
 
-1. Repo: `/home/denis/.pi/agent/memory`. Proposals dir:
+1. Repo: `/home/denis/.pi/agent/memory`. Report dir:
    `/home/denis/.pi/agent/memory-reviews/` (outside the repo on purpose, so
    `/memory commit` doesn't sweep it in).
 2. Verify the working tree is clean (`git status --porcelain`). If dirty,
-   stop and report.
+   stop and report — do not resolve unrelated changes.
 3. `git pull --rebase`. If it fails (network/ssh), stop and report —
    reviewing a stale repo is worse than no review.
 
@@ -37,14 +37,31 @@ proposals.
 
 1. **Contradictions** — does it conflict with another note or with a newer
    note on the same topic? Cross-check notes sharing a project or library.
-2. **Stale references** — verify cheaply: do referenced paths/repos/commands
-   still exist (`ls`, `test -d`)? Don't build or run anything.
+2. **Stale references** — verify cheaply against reality: do referenced
+   paths/repos/commands still exist (`ls`, `test -d`, `grep`)? Don't build
+   or run anything.
 3. **Supersession** — is the note's content fully covered by a newer note?
-   If yes → propose SUPERSEDE (old note: add `status: superseded` + link to
-   replacement at top, `git mv` to `archive/`).
+   If yes → SUPERSEDE (old note: add `status: superseded` + link to
+   replacement at top, `git mv` to `archive/`, update its index).
 4. **Index consistency** — does each index one-liner still match the file?
    Does `wc -c` on each `*/index.md` stay under 4000 chars (the context cap)?
    Are there notes missing from their index?
+
+## Applying fixes
+
+For every finding with concrete evidence (a path that doesn't exist, a
+contradicting sentence, a wrong one-liner):
+
+1. Edit the note **in place** with the minimal correct replacement. Keep
+   edits surgical — never rewrite sections that are still accurate.
+2. For SUPERSEDE/ARCHIVE: mark and `git mv` as described, remove/replace
+   the index entry.
+3. Commit everything as one commit:
+   `git commit -am "memory-review: apply <YYYY>-W<ww> consolidation"`, then
+   `git push origin main`. If push fails, leave the commit local and say so.
+
+Do NOT apply findings you cannot verify with evidence. When unsure, put the
+finding in the report under an "UNRESOLVED" section instead of editing.
 
 ## Output
 
@@ -53,30 +70,22 @@ Write `/home/denis/.pi/agent/memory-reviews/<YYYY>-W<ww>.md` (ISO week) with:
 ```markdown
 # Memory review <YYYY>-W<ww>
 
-Scope: N notes (list or count). Verdict per note: OK / finding.
+Scope: N notes (list or count). Verdict per note: OK / fixed / UNRESOLVED.
 
-## UPDATE
-- `path/file.md` — what and why, with proposed replacement text inline.
+## Applied
+- `path/file.md` — what was changed and the evidence.
 
-## SUPERSEDE
-- `path/old.md` → superseded by `path/new.md` — why.
-
-## ARCHIVE
-- `path/file.md` — why it's obsolete (no replacement).
-
-## INDEX FIXES
-- Which index lines to change, proposed new text.
+## UNRESOLVED
+- finding + why it needs a human decision.
 
 ## Checked, no action
 - one line per healthy note
 ```
 
-Every finding must cite the evidence (a path that doesn't exist, a
+Every entry must cite the evidence (a path that doesn't exist, a
 contradicting sentence, an index line). No speculative findings.
 
 ## Finish
 
-Print the proposal path plus a summary: counts per category, and the 2–3
-findings the human should look at first. The human applies proposals in a
-normal pi session (apply, commit `git add`/`git commit`, `git push`), or asks
-the agent to apply a specific proposal.
+Print the report path plus a summary: counts per category, the commit hash,
+and push status.
