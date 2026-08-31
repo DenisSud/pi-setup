@@ -13,6 +13,7 @@ STORE="$(dirname "$(readlink -f "$(command -v pi)")")/../lib/node_modules/pi-mon
 setup_symlinks() {
   mkdir -p "$EXT_DIR/node_modules/@earendil-works"
   ln -sfn "$STORE/node_modules/@earendil-works/pi-coding-agent" "$EXT_DIR/node_modules/@earendil-works/pi-coding-agent"
+  ln -sfn "$STORE/node_modules/@earendil-works/pi-tui" "$EXT_DIR/node_modules/@earendil-works/pi-tui"
   ln -sfn "$STORE/node_modules/typebox" "$EXT_DIR/node_modules/typebox"
 }
 
