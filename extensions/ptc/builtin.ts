@@ -1,5 +1,5 @@
 /**
- * ptc built-ins — script-friendly read/grep/find.
+ * ptc built-ins — script-friendly read/grep/find/sh.
  *
  * These are ptc-owned: they exist only inside ptc programs (not as direct pi
  * tools), so their JSON shapes are documented in the ptc tool description
@@ -8,8 +8,16 @@
  *
  * All sizes are chars/bytes caps, not model tokens: the ptc output cap
  * (head+tail) is the final safety net.
+ *
+ * `sh` is a boilerplate-removal convenience, not a capability addition: a ptc
+ * program can already `await import("node:child_process")` and spawn anything
+ * (same trust level as the bash tool). It exists because every program that
+ * probes the shell re-rolls a try/catch wrapper around execSync, and a
+ * hanging command should not stall the whole tool. Never throws on nonzero
+ * exit — exit status is data.
  */
 
+import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
@@ -29,6 +37,10 @@ const GREP_MAX_FILE_BYTES = 4 * 1024 * 1024;
 const FIND_MAX_PATHS = 2000;
 /** Dirent walk doesn't descend into these. */
 const SKIP_DIRS = new Set([".git", "node_modules"]);
+/** Default timeout for `sh` commands (a hang must not stall the whole tool). */
+const SH_DEFAULT_TIMEOUT_MS = 30_000;
+/** Default per-stream output cap for `sh`. */
+const SH_MAX_OUTPUT_CHARS = 200_000;
 
 function statOrNull(path: string) {
 	return stat(path).catch(() => null);
@@ -52,6 +64,64 @@ function noSuchFile(what: string, path: string): Error & { code: string } {
 	err.code = "ENOENT";
 	return err;
 }
+
+registerPtcTool(
+	"sh",
+	async (args) => {
+		const command = String(args.command ?? "");
+		if (!command.trim()) throw new Error("sh: command is required");
+		const timeoutMs = Math.max(1, Math.round(Number(args.timeout_ms ?? SH_DEFAULT_TIMEOUT_MS)));
+		const maxOutput = Math.max(1, Math.round(Number(args.max_output ?? SH_MAX_OUTPUT_CHARS)));
+		const cwd = args.cwd != null ? String(args.cwd) : process.cwd();
+
+		return await new Promise((resolve, reject) => {
+			const child = spawn(command, { shell: true, cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+			let stdout = "";
+			let stderr = "";
+			let truncated = false;
+			let timedOut = false;
+			let settled = false;
+			const append = (acc: () => string, set: (s: string) => void, chunk: Buffer) => {
+				if (acc().length >= maxOutput) {
+					truncated = true;
+					return;
+				}
+				let next = acc() + chunk.toString();
+				if (next.length > maxOutput) {
+					next = next.slice(0, maxOutput);
+					truncated = true;
+				}
+				set(next);
+			};
+			child.stdout.on("data", (c: Buffer) => append(() => stdout, (s) => (stdout = s), c));
+			child.stderr.on("data", (c: Buffer) => append(() => stderr, (s) => (stderr = s), c));
+			const timer = setTimeout(() => {
+				timedOut = true;
+				try {
+					child.kill("SIGKILL");
+				} catch {
+					// already dead
+				}
+			}, timeoutMs);
+			child.on("error", (e) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				reject(e);
+			});
+			child.on("close", (code, signal) => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(timer);
+				resolve({ stdout, stderr, code, signal, timed_out: timedOut, truncated });
+			});
+		});
+	},
+	{
+		signature:
+			"sh({ command, timeout_ms?, max_output?, cwd? }) → { stdout, stderr, code, signal, timed_out, truncated } — never throws on nonzero exit; default timeout 30 s, default output cap 200k chars/stream",
+	},
+);
 
 registerPtcTool(
 	"read",

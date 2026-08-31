@@ -48,6 +48,10 @@ Same trust level as the bash tool.
    - `read({ path, offset?, limit? }) → { path, content, truncated, total_bytes, total_lines }`
    - `grep({ pattern, path?, ignore_case?, max_matches? }) → { matches: {path,line,text}[], truncated, total_matches }`
    - `find({ pattern, path?, type? }) → { paths, truncated, total }`
+   - `sh({ command, timeout_ms?, max_output?, cwd? }) → { stdout, stderr, code, signal, timed_out, truncated }`
+     (boilerplate removal, not a capability addition — a program can already
+     `await import("node:child_process")`; never throws on nonzero exit;
+     default timeout 30 s so a hang cannot stall the tool)
 
 6. **Default pi tools are NOT auto-registered.** `bash`/`write`/`edit` are
    side-effecting (keep direct for the authorization boundary), `ls` is
@@ -66,6 +70,22 @@ Same trust level as the bash tool.
    Unknown tool name, call limit (500), timeout, and program exceptions all
    surface as `isError` results with actionable text.
 
+9. **User code is a separate ES module.** The child runs a wrapper (protocol
+   prelude) that dynamically imports the user code written to its own
+   `user-program.mjs`. Rationale (session feedback, 2026-08): wrapping user
+   code in an async IIFE made static `import` declarations illegal (SyntaxError
+   before line 1 of user code ran) and shifted every reported line number by
+   the prelude length. With the split: static imports work, error line numbers
+   point at the user's file (and Node's SyntaxError message includes the
+   failing line), and tool globals stay visible because wrapper and imported
+   module share globalThis. `require` does not exist — document `await
+   import(...)` as the alternative.
+
+10. **Temp dir lifecycle.** One `mkdtemp` per run. Deleted on success; kept on
+   failure with its path in the error text (and `details.programDir`) so the
+   model can inspect `user-program.mjs` instead of debugging blind. (An earlier
+   version imported `rm` but never called it — dirs leaked.)
+
 ## Deferred (v2 if needed)
 
 - **Generated output-shape block**: optional `output` typebox schema at
@@ -77,5 +97,5 @@ Same trust level as the bash tool.
 
 - `index.ts` — `ptc` tool (registers in `session_start`), child-process runner, output capping.
 - `registry.ts` — `registerPtcTool` / `listPtcTools` / `getPtcTool`. The only file other extensions import.
-- `builtin.ts` — script-friendly `read` / `grep` / `find` implementations + signatures.
+- `builtin.ts` — script-friendly `read` / `grep` / `find` / `sh` implementations + signatures.
 - `test/harness.mjs`, `test/run.sh` — same harness pattern as consult (stubbed ExtensionAPI, no network).

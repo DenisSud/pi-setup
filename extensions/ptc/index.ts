@@ -11,6 +11,11 @@
  *
  * Mechanics:
  *   - The program runs in a Node child process (same trust level as bash).
+ *   - Two files: a wrapper (protocol prelude) and the user code written to its
+ *     own ES module, `await import()`ed by the wrapper. Static `import` in user
+ *     code just works, and error line numbers point at the user's file, not the
+ *     concatenated blob. Tool globals are visible because both files share
+ *     globalThis.
  *   - Protocol: JSON lines over the child's stdout/stdin. The child sends
  *     {type:"call", id, name, args}; the parent runs the registered
  *     implementation and answers {id, ok, value|error}. The child sends
@@ -25,7 +30,7 @@
  *     final registry (all extension factories have run by then).
  */
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -50,6 +55,7 @@ const maxToolCalls = () => Number(process.env.PTC_MAX_TOOL_CALLS) || 500;
 function prelude(names: string[]): string {
 	return `import { createInterface } from "node:readline";
 import { format } from "node:util";
+import { pathToFileURL } from "node:url";
 
 const TOOL_NAMES = ${JSON.stringify(names)};
 
@@ -60,6 +66,7 @@ console.log = console.info = (...a) => __out.push(a.map(fmt).join(" "));
 console.error = console.warn = (...a) => __errOut.push(a.map(fmt).join(" "));
 console.debug = console.trace = () => {};
 const print = console.log;
+globalThis.print = print;
 
 let __seq = 0;
 const __pending = new Map();
@@ -96,11 +103,17 @@ globalThis.__ptc_finish = () => __finish(true);
 `;
 }
 
-function buildProgram(names: string[], code: string): string {
+/**
+ * Wrapper: prelude + dynamic import of the user's module. The user code is a
+ * separate file so its static `import` declarations are legal and its error
+ * line numbers are its own. `__finish` is called on both resolve and reject;
+ * tool-call globals were installed by the prelude before the import runs.
+ */
+function wrapperProgram(userPath: string, names: string[]): string {
 	return (
 		prelude(names) +
-		"\n// ── user program ──\n" +
-		`(async () => {\n${code}\n})()` +
+		`\n// ── user program (separate module) ──\n` +
+		`import(pathToFileURL(${JSON.stringify(userPath)}).href)` +
 		".then(() => __ptc_finish())" +
 		".catch((e) => __finish(false, e));\n"
 	);
@@ -139,8 +152,22 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 	if (names.length === 0) throw new Error("ptc: no tools registered — nothing to call from a program");
 
 	const dir = await mkdtemp(join(tmpdir(), "ptc-"));
-	const progPath = join(dir, "program.mjs");
-	await writeFile(progPath, buildProgram(names, code));
+	const userPath = join(dir, "user-program.mjs");
+	await writeFile(userPath, code);
+
+	// Pre-validate syntax: dynamic-import SyntaxErrors carry no file/frame info
+	// on current Node, while `node --check` prints the exact file, line, and
+	// caret. Fail fast here — cheaper and far more diagnostic than a blind
+	// "Unexpected token" with shifted line numbers.
+	const check = await new Promise<{ ok: boolean; stderr: string }>((res) => {
+		execFile(process.execPath, ["--check", userPath], (err, _o, errout) => res({ ok: !err, stderr: String(errout || "") }));
+	});
+	if (!check.ok) {
+		throw new Error(`ptc: syntax error in user program\n${check.stderr.trim()}\n(program kept at ${dir})`);
+	}
+
+	const progPath = join(dir, "wrapper.mjs");
+	await writeFile(progPath, wrapperProgram(userPath, names));
 
 	const child = spawn(process.execPath, [progPath], {
 		stdio: ["pipe", "pipe", "pipe"],
@@ -215,23 +242,25 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 			if (settled) return;
 			settled = true;
 			kill();
-			reject(new Error(`ptc: program timed out after ${TIMEOUT_MS} ms`));
+			reject(new Error(`ptc: program timed out after ${TIMEOUT_MS} ms (program kept at ${dir})`));
 		}, TIMEOUT_MS);
 		child.on("close", (codeNum) => {
 			clearTimeout(watchdog);
 			if (settled) return;
 			settled = true;
 			if (done) return resolve(done);
-			if (signal?.aborted) return reject(new Error("ptc: aborted"));
+			if (signal?.aborted) return reject(new Error(`ptc: aborted (program kept at ${dir})`));
 			return reject(
-				new Error(`ptc: program exited (code ${codeNum}) without finishing${stderrTail ? `; stderr: ${stderrTail.trim()}` : ""}`),
+				new Error(
+					`ptc: program exited (code ${codeNum}) without finishing${stderrTail ? `; stderr: ${stderrTail.trim()}` : ""} (program kept at ${dir})`,
+				),
 			);
 		});
 	});
 
 	try {
 		const result = await finished;
-		return { result, toolCalls };
+		return { result, toolCalls, dir };
 	} finally {
 		signal?.removeEventListener("abort", onAbort);
 		kill();
@@ -239,11 +268,11 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 }
 
 function buildDescription(names: string[]): string {
-	const builtinSigs = ["read", "grep", "find"]
+	const builtinSigs = ["read", "grep", "find", "sh"]
 		.map((n) => getPtcTool(n)?.signature)
 		.filter((s): s is string => Boolean(s));
 	const builtinsBlock = builtinSigs.length ? `Built-ins (structured JSON):\n${builtinSigs.map((s) => `- ${s}`).join("\n")}\n` : "";
-	const others = names.filter((n) => n !== "read" && n !== "grep" && n !== "find");
+	const others = names.filter((n) => n !== "read" && n !== "grep" && n !== "find" && n !== "sh");
 	const othersBlock = others.length
 		? `Registered tools (args = that tool's input schema; result = whatever the tool returns):\n${others
 				.map((n) => {
@@ -254,8 +283,9 @@ function buildDescription(names: string[]): string {
 		: "";
 	return [
 		"Run a JavaScript program (top-level await) in a Node child process — general-purpose code, not just tool orchestration. The program's printed output (console.log / print) is the result; intermediate tool results never enter context.",
+		"Your code runs as its own ES module — static `import` works; `require` does not (use `await import(...)` if needed).",
 		"",
-		"Tools are available as global async functions with their exact names; each call resolves to the tool's result (structured JSON for the built-ins). This makes ptc ideal for fan-out, filtering, and aggregation across many tool calls.",,
+		"Tools are available as global async functions with their exact names; each call resolves to the tool's result (structured JSON for the built-ins). This makes ptc ideal for fan-out, filtering, and aggregation across many tool calls.",
 		builtinsBlock,
 		othersBlock,
 		"Everything else is ordinary Node: import builtins (node:fs, node:child_process, …), compute, parse, even run shell commands when that fits. Parallel tool calls with Promise.all; tool errors reject the awaited promise — handle or retry them in code.",
@@ -302,30 +332,35 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 				if (!params.code?.trim()) return errorResult("ptc: `code` is empty");
 				try {
-					const { result, toolCalls } = await runProgram(params.code, signal, ctx);
-					const raw = result.ok
-						? result.output
-						: `${result.output}${result.output ? "\n\n" : ""}Program error: ${result.error ?? "unknown error"}${
-								result.stderr ? `\nProgram stderr:\n${result.stderr}` : ""
-							}`;
-					const { text, capped } = headTailCap(raw);
-					let fullOutputPath: string | undefined;
-					if (capped) {
-						fullOutputPath = join(tmpdir(), `ptc-output-${Date.now()}.txt`);
-						await writeFile(fullOutputPath, raw).catch(() => undefined);
-					}
-					if (result.stderr && result.ok) {
-						// Program succeeded but printed to stderr — surface a tail so the model isn't blind to warnings.
-						const tail = result.stderr.length > 2000 ? `…${result.stderr.slice(-2000)}` : result.stderr;
-						return {
-							content: [{ type: "text" as const, text: `${text}\n\nProgram stderr:\n${tail}` }],
-							details: { ok: true, toolCalls, outputChars: raw.length, fullOutputPath },
-						};
-					}
-					if (!result.ok) {
-						return { content: [{ type: "text" as const, text }], details: { ok: false, toolCalls }, isError: true as const };
-					}
-					return { content: [{ type: "text" as const, text }], details: { ok: true, toolCalls, outputChars: raw.length, fullOutputPath } };
+				const { result, toolCalls, dir } = await runProgram(params.code, signal, ctx);
+				if (!result.ok) {
+					const raw = `${result.output}${result.output ? "\n\n" : ""}Program error: ${result.error ?? "unknown error"}${
+						result.stderr ? `\nProgram stderr:\n${result.stderr}` : ""
+					}\n\nProgram kept for inspection: ${dir}`;
+					const { text } = headTailCap(raw);
+					return {
+						content: [{ type: "text" as const, text }],
+						details: { ok: false, toolCalls, programDir: dir },
+						isError: true as const,
+					};
+				}
+				// Success: temp dir is no longer needed — delete it (fixes the leak).
+				await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+				const { text, capped } = headTailCap(result.output);
+				let fullOutputPath: string | undefined;
+				if (capped) {
+					fullOutputPath = join(tmpdir(), `ptc-output-${Date.now()}.txt`);
+					await writeFile(fullOutputPath, result.output).catch(() => undefined);
+				}
+				if (result.stderr) {
+					// Program succeeded but printed to stderr — surface a tail so the model isn't blind to warnings.
+					const tail = result.stderr.length > 2000 ? `…${result.stderr.slice(-2000)}` : result.stderr;
+					return {
+						content: [{ type: "text" as const, text: `${text}\n\nProgram stderr:\n${tail}` }],
+						details: { ok: true, toolCalls, outputChars: result.output.length, fullOutputPath },
+					};
+				}
+				return { content: [{ type: "text" as const, text }], details: { ok: true, toolCalls, outputChars: result.output.length, fullOutputPath } };
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : format(err);
 					return errorResult(msg);
