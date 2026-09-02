@@ -32,6 +32,13 @@ jq -s '
 mv "$target.tmp" "$target"
 echo "merged settings into $target"
 
+# Global context file: pi loads ~/.pi/agent/AGENTS.md in every session.
+# Link the repo copy in; never overwrite an existing file (user wins).
+if [[ ! -e "$HOME/.pi/agent/AGENTS.md" ]]; then
+  ln -s "$repo_dir/global/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+  echo "linked global/AGENTS.md -> ~/.pi/agent/AGENTS.md"
+fi
+
 # Install the package itself (local path — live loading, no ref pinning)
 if [[ "${PI_INSTALL_PACKAGE:-1}" == "1" ]]; then
   pi install "$repo_dir"
