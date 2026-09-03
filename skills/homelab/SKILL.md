@@ -25,4 +25,4 @@ If you learn a new durable fact (changed IP, new service, rotated key), **write 
 - **Clean up after yourself.** Remove temp files, downloaded-but-unwanted files, and test containers/keypairs you created. Delete downloaded media only after the library copy is verified.
 - **Read-only diagnosis first.** Investigate with logs and status checks (`journalctl`, `podman logs`, `systemctl status`) before changing anything.
 - **Verify after changes.** Confirm the service actually works (curl the endpoint, check the library scan result, test the SSH clone) — a successful command isn't the same as a working service.
-- **Secrets stay private.** API keys and passwords live in the memory note; never paste them into public places or memory-index files.
+- **Secrets stay out of notes.** Credential values live only in `~/.pi/agent/secrets.md` (local, untracked). Read it with `bash cat` when a command needs a value; never write values into notes, files, commits, or chat replies.

@@ -8,7 +8,7 @@ The `pi-setup` pi package: Denis's skills + extensions + shareable settings, ins
 
 ## Hard rules
 
-- **Private repo.** `skills/homelab/` contains real credentials (API keys, LAN/WAN access details). Never push to a public remote; never paste secrets into memory notes or elsewhere.
+- **Private repo, but keep secrets out anyway.** No passwords/API keys in this repo (memory notes included) — credential values live only in `~/.pi/agent/secrets.md` (local, untracked, mode 600); notes and skills hold pointers. Never paste secret values into notes, prompts, commits, or replies.
 - Extensions import only from the aliased packages: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-tui`, `typebox`. No new npm dependencies.
 - Run extension tests before committing: `extensions/<name>/test/run.sh harness` (no network). Consult also has a `live` mode (needs `CONSULT_KEY`, costs ~$0.01).
 - Commit with short descriptive messages; push after committing.
