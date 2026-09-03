@@ -1,12 +1,10 @@
 ---
 name: memory-review
 description: |
-  Periodic consolidation of Denis's memory repository
-  (~/.pi/agent/memory). Reviews recently-changed notes for staleness,
-  contradictions, and index drift, then applies the fixes directly:
-  edits, commits, and pushes. Writes an audit report. Use when: running a
-  memory review (weekly cron `memory-review` or on-demand
-  "memory review" request).
+  Periodic consolidation of Denis's memory repository (~/.pi/agent/memory):
+  review recent notes for staleness, contradictions, index drift — then apply
+  fixes directly (edit, commit, push). Use when: running a memory review
+  (weekly cron `memory-review` or an on-demand "memory review" request).
 ---
 
 # Memory Review

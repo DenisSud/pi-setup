@@ -1,14 +1,10 @@
 ---
 name: cron-jobs
 description: |
-  Cron jobs on Linux: schedules a bash entry point (run.sh) via systemd user
-  timers. Two tiers — Tier 1: simple bash scripts as Nix flake apps
-  (writeShellApplication: pinned deps, build-time shellcheck); Tier 2: real
-  projects (uv/Python, existing ~/dev projects) run via their devenv `run`
-  script. Creates job dir + service/timer units, validates schedules with
-  systemd-analyze, enables and verifies. Use when the user wants a cron job,
-  periodic/recurring script, "run every hour/day/week/month", or any
-  systemd-timer-driven job.
+  Cron jobs on Linux: schedules a script via systemd user timers. Creates the
+  job dir + service/timer units, validates schedules, enables and verifies.
+  Use when the user wants a cron job, periodic/recurring script, "run every
+  hour/day/week/month", or any systemd-timer-driven job.
 ---
 
 # Cron Jobs

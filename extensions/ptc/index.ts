@@ -306,7 +306,7 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			promptSnippet:
 				"Run a JS program (top-level await) in a Node child process — general-purpose code plus tools as async functions",
 			promptGuidelines: [
-				"ptc runs arbitrary JS in a Node child process (top-level await) — it is not limited to tool orchestration: import Node builtins, compute, parse data, write scripts, even spawn shell when it fits. Tools are additionally available as global async functions, which makes ptc the tool of choice when many tool calls can be filtered or aggregated in code; use direct tool calls for single lookups and steps that need judgment between calls.",
+				"ptc is the tool of choice when many tool calls can be filtered or aggregated in code; use direct tool calls for single lookups and steps that need judgment between calls.",
 			],
 			renderCall(args, theme, context) {
 				const code = typeof args.code === "string" ? args.code : "";

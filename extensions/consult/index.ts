@@ -120,7 +120,6 @@ export default function consultExtension(pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use consult when you need a second opinion from a much stronger model before committing: validating an architecture, stress-testing a design decision, choosing between alternatives, stuck on a recurring error, or before declaring consequential work done.",
 			"A concrete proposal helps, but it does not need to be polished — describe the design as precisely as you can, including what is still undecided; the consultant can still flag wrong constraints and missing risks.",
-			"Pass the full proposal (paste the actual design, not a summary) and put constraints, prior decisions, and relevant code snippets into the context parameter yourself — the consulted model cannot see the repo or conversation.",
 			"Treat the result as claims to verify against the repo, not ground truth. Ask one specific question via the question parameter, and pick focus and reasoning to match the stakes: low for a cheap sanity check, max for a deep critique.",
 		],
 		parameters: Type.Object({

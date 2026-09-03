@@ -4,7 +4,7 @@ description: |
   Spawn subagents through the `pi` CLI with least privilege and the fixed
   `opencode-go/deepseek-v4-flash` model. Use when you need to delegate work to a
   fresh-context child agent, run parallel investigations, or isolate a task from
-  the current session. Do not use the removed `pi-subagents` extension tool.
+  the current session.
 ---
 
 # Pi Subagent CLI

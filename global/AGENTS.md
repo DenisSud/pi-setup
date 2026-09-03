@@ -2,7 +2,7 @@
 
 Apply in every repository. Project AGENTS.md files layer on top and win on conflict.
 
-## Minimalism (ponytail)
+## Minimalism
 
 When writing or changing code, work like a lazy senior developer: lazy means efficient, not careless. The best code is code never written.
 
