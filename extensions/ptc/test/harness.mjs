@@ -17,8 +17,10 @@
  *   - program error              → isError with the stack, output preserved
  *   - timeout                    → PTC_TIMEOUT_MS honored, isError
  *   - static import              → user module imports work (separate module)
- *   - syntax error diagnostics   → references user-program.mjs, dir kept
- *   - temp dir lifecycle         → deleted on success, kept on failure
+ *   - syntax error diagnostics   → references user-program.mjs, file kept
+ *   - program file lifecycle     → saved+reported every run, kept (never deleted)
+ *   - rerun by path              → file/dir forms, cwd stable, edits picked up
+ *   - param validation           → both/neither/bad path are clean errors
  *   - sh                         → stdout/stderr/code, nonzero exit no-throw
  *   - sh timeout + cap           → timed_out flag, truncated flag
  *   - output cap                 → head+tail cap + full output file written
@@ -28,9 +30,9 @@
  * Requires node_modules symlinks set up by run.sh.
  */
 
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile, mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import createPtc from "../index.ts";
 import { listPtcTools, getPtcTool, registerPtcTool } from "../registry.ts";
 import createWebSearch from "../../web-search/index.ts";
@@ -95,8 +97,18 @@ async function setup() {
 }
 
 /** Execute a program and return the tool result object. */
+/** Program output = result text up to the appended "Program file:" line. */
+function outputText(res) {
+	return res.content[0].text.split("\n\nProgram file:")[0];
+}
+
 function runTool(ptc, code, signal) {
-	return ptc.execute("test-call-id", { code }, signal, undefined, { modelRegistry: {} });
+	return runToolParams(ptc, { code }, signal);
+}
+
+/** Execute with full params (code/path) and return the tool result object. */
+function runToolParams(ptc, params, signal) {
+	return ptc.execute("test-call-id", params, signal, undefined, { modelRegistry: {} });
 }
 
 let dir;
@@ -137,7 +149,7 @@ test("fan-out: Promise.all reads two files, program aggregates", async () => {
 print(JSON.stringify({ lens: [x.content.length, y.content.length], trunc: x.truncated || y.truncated, lines: x.total_lines + y.total_lines }));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const parsed = JSON.parse(res.content[0].text);
+	const parsed = JSON.parse(outputText(res));
 	assert(parsed.lens.join(",") === "11,12", `lengths 11,12 — got ${parsed.lens}`);
 	assert(parsed.lines === 4, `4 total lines — got ${parsed.lines}`);
 });
@@ -152,7 +164,7 @@ test("grep: structured matches, filtered in code", async () => {
 print(JSON.stringify({ total: g.total_matches, errors: g.matches.map(m => m.text.split(" ")[1]) }));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const parsed = JSON.parse(res.content[0].text);
+	const parsed = JSON.parse(outputText(res));
 	assert(parsed.total === 3, `3 matches — got ${parsed.total}`);
 	assert(JSON.stringify(parsed.errors) === JSON.stringify(["bad1", "bad2", "bad3"]), `texts — got ${JSON.stringify(parsed.errors)}`);
 });
@@ -169,7 +181,7 @@ const d = await find({ pattern: "sub", path: ${JSON.stringify(dir)}, type: "dir"
 print(JSON.stringify({ files: f.paths.sort(), dirs: d.paths }));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const parsed = JSON.parse(res.content[0].text);
+	const parsed = JSON.parse(outputText(res));
 	assert(JSON.stringify(parsed.files) === JSON.stringify(["sub/x.py", "x.py"]), `files — got ${JSON.stringify(parsed.files)}`);
 	assert(JSON.stringify(parsed.dirs) === JSON.stringify(["sub"]), `dirs — got ${JSON.stringify(parsed.dirs)}`);
 });
@@ -190,6 +202,7 @@ catch (e) { print("caught: " + e.message.slice(0, 30)); }`,
 	);
 	assert(!res.isError, `program handled it — got ${res.content[0].text}`);
 	assert(res.content[0].text.includes("caught: read: no such file"), `error text — got ${res.content[0].text}`);
+	assert(!outputText(res).includes("Program file:"), "appended saved-program line is not part of the program output");
 });
 
 test("program error: isError with stack in the message", async () => {
@@ -222,10 +235,10 @@ test("static import: user module imports work, line numbers are user's own", asy
 print(readFileSync(${JSON.stringify(f)}, "utf8").trim());`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	assert(res.content[0].text.trim() === "hello import", `output — got ${res.content[0].text}`);
+	assert(outputText(res).trim() === "hello import", `output — got ${res.content[0].text}`);
 });
 
-test("syntax error: precise diagnostic, failing line echoed, dir kept", async () => {
+test("syntax error: precise diagnostic, failing line echoed, file kept", async () => {
 	const { ptc } = await setup();
 	const res = await runTool(ptc, `import { broken from "node:fs";
 print("never");`);
@@ -234,21 +247,63 @@ print("never");`);
 	assert(text.includes("user-program.mjs"), `references user file — got ${text.slice(0, 300)}`);
 	assert(text.includes("broken"), `failing line echoed — got ${text.slice(0, 300)}`);
 	assert(text.includes("syntax error"), `names the failure — got ${text.slice(0, 300)}`);
-	const m = text.match(/\(program kept at (\S+)\)/);
-	assert(m, `program dir reported — got ${text.slice(-300)}`);
-	assert((await stat(m[1]).catch(() => null))?.isDirectory(), "kept dir exists");
-	const kept = await readdir(m[1]);
-	assert(kept.includes("user-program.mjs"), "user program preserved");
-	await rm(m[1], { recursive: true, force: true });
+	const m = text.match(/\(program at (\S+)\)/);
+	assert(m, `program path reported — got ${text.slice(-300)}`);
+	assert((await stat(m[1]).catch(() => null))?.isFile(), "kept program file exists");
+	const kept = await readFile(m[1], "utf8");
+	assert(kept.includes("broken"), "user program preserved");
+	await rm(m[1], { force: true });
 });
 
-test("temp dir lifecycle: deleted on success", async () => {
+test("program file: saved+reported on every run, kept on success", async () => {
 	const { ptc } = await setup();
-	const countPtcDirs = async () => (await readdir(tmpdir())).filter((n) => n.startsWith("ptc-")).length;
-	const before = await countPtcDirs();
 	const res = await runTool(ptc, `print("ok");`);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	assert((await countPtcDirs()) === before, "no ptc temp dir leaked after success");
+	const p = res.details.programPath;
+	assert(typeof p === "string" && p.endsWith("user-program.mjs"), `programPath reported — got ${JSON.stringify(res.details)}`);
+	assert((await stat(p).catch(() => null))?.isFile(), "program file kept on success");
+	assert(res.content[0].text.includes(p), "result text shows the program path");
+	assert(res.content[0].text.includes("rerun"), "result text hints the rerun flow");
+});
+
+test("rerun by path: file and dir forms, same output and cwd", async () => {
+	const { ptc } = await setup();
+	const first = await runTool(ptc, `print("cwd:" + process.cwd());`);
+	assert(!first.isError, `no error: ${first.content[0].text}`);
+	const firstOut = first.content[0].text.split("\n")[0];
+	const p = first.details.programPath;
+	const progDir = dirname(p);
+	assert(firstOut === `cwd:${progDir}`, `cwd is the program dir — got ${firstOut}, want ${progDir}`);
+	for (const path of [p, progDir]) {
+		const res = await runToolParams(ptc, { path });
+		assert(!res.isError, `no error for ${path}: ${res.content[0].text}`);
+		assert(res.content[0].text.split("\n")[0] === firstOut, `same output+cwd via ${path} — got ${res.content[0].text}`);
+		assert(res.details.programPath === p, "same program file reported");
+	}
+});
+
+test("rerun by path: re-reads the file, picks up edits", async () => {
+	const { ptc } = await setup();
+	const first = await runTool(ptc, `print("v1");`);
+	assert(!first.isError, `no error: ${first.content[0].text}`);
+	const p = first.details.programPath;
+	await writeFile(p, `print("v2");`);
+	const res = await runToolParams(ptc, { path: p });
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	assert(res.content[0].text.startsWith("v2"), `edited output — got ${res.content[0].text}`);
+	await rm(p, { force: true });
+});
+
+test("param validation: both/neither/bad path are clean errors", async () => {
+	const { ptc } = await setup();
+	const both = await runToolParams(ptc, { code: `print(1);`, path: "/tmp" });
+	assert(both.isError && both.content[0].text.includes("not both"), `both — got ${both.content[0].text}`);
+	const neither = await runToolParams(ptc, {});
+	assert(neither.isError && neither.content[0].text.includes("provide `code`"), `neither — got ${neither.content[0].text}`);
+	const missing = await runToolParams(ptc, { path: "/tmp/ptc-no-such-dir-xyz" });
+	assert(missing.isError && missing.content[0].text.includes("no program at"), `missing — got ${missing.content[0].text}`);
+	const noProgram = await runToolParams(ptc, { path: dir }); // fixture dir, no user-program.mjs inside
+	assert(noProgram.isError && noProgram.content[0].text.includes("no program file"), `noProgram — got ${noProgram.content[0].text}`);
 });
 
 test("sh: captures streams, nonzero exit is data not error", async () => {
@@ -259,7 +314,7 @@ test("sh: captures streams, nonzero exit is data not error", async () => {
 print(JSON.stringify(r));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const r = JSON.parse(res.content[0].text);
+	const r = JSON.parse(outputText(res));
 	assert(r.stdout === "out\n", `stdout — got ${JSON.stringify(r.stdout)}`);
 	assert(r.stderr === "err\n", `stderr — got ${JSON.stringify(r.stderr)}`);
 	assert(r.code === 3, `code — got ${r.code}`);
@@ -274,7 +329,7 @@ test("sh: timeout kills the command and reports", async () => {
 print(JSON.stringify(r));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const r = JSON.parse(res.content[0].text);
+	const r = JSON.parse(outputText(res));
 	assert(r.timed_out === true, `timed_out — got ${JSON.stringify(r)}`);
 	assert(r.signal === "SIGKILL", `signal — got ${JSON.stringify(r)}`);
 });
@@ -287,7 +342,7 @@ test("sh: output cap flags truncation", async () => {
 print(JSON.stringify(r));`,
 	);
 	assert(!res.isError, `no error: ${res.content[0].text}`);
-	const r = JSON.parse(res.content[0].text);
+	const r = JSON.parse(outputText(res));
 	assert(r.stdout.length === 100, `capped stdout — got ${r.stdout.length}`);
 	assert(r.truncated === true, "truncated flag");
 });

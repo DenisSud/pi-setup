@@ -26,15 +26,19 @@
  *     (PTC_MAX_TOOL_CALLS, default 500) keep runaway programs bounded.
  *   - Output is head+tail capped for the LLM; the full output is written to a
  *     temp file whose path is reported in the result.
+ *   - Every run reports the program file path (/tmp/ptc-XXXX/user-program.mjs);
+ *     `path` (file or dir) reruns a saved program instead of inline `code` —
+ *     the iteration loop: edit the file, rerun by path. Run dirs are kept
+ *     (tiny; /tmp cleanup reclaims them) so reported paths stay valid.
  *   - The tool registers in `session_start` so the description can list the
  *     final registry (all extension factories have run by then).
  */
 
 import { execFile, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { format } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -48,6 +52,13 @@ const LLM_OUTPUT_CHARS = 30_000;
 /** Timeout / call cap read at call time so tests (and future settings) can tune per run. */
 const timeoutMs = () => Number(process.env.PTC_TIMEOUT_MS) || 120_000;
 const maxToolCalls = () => Number(process.env.PTC_MAX_TOOL_CALLS) || 500;
+
+/** Name of the user program file inside its run dir (stable across runs). */
+const USER_PROGRAM_NAME = "user-program.mjs";
+
+function statOrNull(path: string) {
+	return stat(path).catch(() => null);
+}
 
 // ── child program assembly ─────────────────────────────────────────────────
 
@@ -145,15 +156,33 @@ function errorResult(text: string) {
 	return { content: [{ type: "text" as const, text }], details: {}, isError: true as const };
 }
 
-async function runProgram(code: string, signal: AbortSignal | undefined, ctx: unknown) {
+async function runProgram(
+	{ code, path }: { code?: string; path?: string },
+	signal: AbortSignal | undefined,
+	ctx: unknown,
+) {
 	const TIMEOUT_MS = timeoutMs();
 	const MAX_TOOL_CALLS = maxToolCalls();
 	const names = listPtcTools().map((t) => t.name);
 	if (names.length === 0) throw new Error("ptc: no tools registered — nothing to call from a program");
 
-	const dir = await mkdtemp(join(tmpdir(), "ptc-"));
-	const userPath = join(dir, "user-program.mjs");
-	await writeFile(userPath, code);
+	// Locate the user program: freshly written `code`, or a previously saved
+	// program via `path` (accepts the program file or its run dir — results
+	// report the file, the rerun hint shows the dir).
+	let userPath: string;
+	if (path != null) {
+		const given = resolve(path);
+		const st = await statOrNull(given);
+		if (!st) throw new Error(`ptc: no program at ${given}`);
+		userPath = st.isDirectory() ? join(given, USER_PROGRAM_NAME) : given;
+		if (!(await statOrNull(userPath))?.isFile()) {
+			throw new Error(`ptc: no program file at ${userPath} (expected ${USER_PROGRAM_NAME} in the given directory)`);
+		}
+	} else {
+		const dir = await mkdtemp(join(tmpdir(), "ptc-"));
+		userPath = join(dir, USER_PROGRAM_NAME);
+		await writeFile(userPath, code ?? "");
+	}
 
 	// Pre-validate syntax: dynamic-import SyntaxErrors carry no file/frame info
 	// on current Node, while `node --check` prints the exact file, line, and
@@ -163,15 +192,19 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 		execFile(process.execPath, ["--check", userPath], (err, _o, errout) => res({ ok: !err, stderr: String(errout || "") }));
 	});
 	if (!check.ok) {
-		throw new Error(`ptc: syntax error in user program\n${check.stderr.trim()}\n(program kept at ${dir})`);
+		throw new Error(`ptc: syntax error in user program\n${check.stderr.trim()}\n(program at ${userPath})`);
 	}
 
-	const progPath = join(dir, "wrapper.mjs");
+	// The wrapper always runs from a fresh run dir (the program file may be a
+	// saved program outside it); the child's cwd is the program's own dir in
+	// both modes, so cwd-relative behavior matches between first run and rerun.
+	const wrapperDir = await mkdtemp(join(tmpdir(), "ptc-"));
+	const progPath = join(wrapperDir, "wrapper.mjs");
 	await writeFile(progPath, wrapperProgram(userPath, names));
 
 	const child = spawn(process.execPath, [progPath], {
 		stdio: ["pipe", "pipe", "pipe"],
-		cwd: dir,
+		cwd: dirname(userPath),
 		env: process.env,
 	});
 
@@ -242,17 +275,17 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 			if (settled) return;
 			settled = true;
 			kill();
-			reject(new Error(`ptc: program timed out after ${TIMEOUT_MS} ms (program kept at ${dir})`));
+			reject(new Error(`ptc: program timed out after ${TIMEOUT_MS} ms (program at ${userPath})`));
 		}, TIMEOUT_MS);
 		child.on("close", (codeNum) => {
 			clearTimeout(watchdog);
 			if (settled) return;
 			settled = true;
 			if (done) return resolve(done);
-			if (signal?.aborted) return reject(new Error(`ptc: aborted (program kept at ${dir})`));
+			if (signal?.aborted) return reject(new Error(`ptc: aborted (program at ${userPath})`));
 			return reject(
 				new Error(
-					`ptc: program exited (code ${codeNum}) without finishing${stderrTail ? `; stderr: ${stderrTail.trim()}` : ""} (program kept at ${dir})`,
+					`ptc: program exited (code ${codeNum}) without finishing${stderrTail ? `; stderr: ${stderrTail.trim()}` : ""} (program at ${userPath})`,
 				),
 			);
 		});
@@ -260,7 +293,7 @@ async function runProgram(code: string, signal: AbortSignal | undefined, ctx: un
 
 	try {
 		const result = await finished;
-		return { result, toolCalls, dir };
+		return { result, toolCalls, userPath };
 	} finally {
 		signal?.removeEventListener("abort", onAbort);
 		kill();
@@ -284,6 +317,7 @@ function buildDescription(names: string[]): string {
 	return [
 		"Run a JavaScript program (top-level await) in a Node child process — general-purpose code, not just tool orchestration. The program's printed output (console.log / print) is the result; intermediate tool results never enter context.",
 		"Your code runs as its own ES module — static `import` works; `require` does not (use `await import(...)` if needed).",
+		"Every run saves the program to a temp file and the result reports its path; to rerun a saved program (picking up any edits made to the file), call ptc with just `path` — the program file or its directory.",
 		"",
 		"Tools are available as global async functions with their exact names; each call resolves to the tool's result (structured JSON for the built-ins). This makes ptc ideal for fan-out, filtering, and aggregation across many tool calls.",
 		builtinsBlock,
@@ -310,6 +344,11 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			],
 			renderCall(args, theme, context) {
 				const code = typeof args.code === "string" ? args.code : "";
+				const path = typeof args.path === "string" ? args.path : "";
+				if (path && !code.trim()) {
+					// Rerun by path: show what is being rerun, not a code body.
+					return new Text(theme.fg("toolTitle", theme.bold("ptc ")) + theme.fg("dim", `rerun ${path}`), 0, 0);
+				}
 				if (!context.expanded || !code.trim()) {
 					// Collapsed: one-line preview of the first meaningful line.
 					const first = code.split("\n").find((l) => l.trim()) ?? "";
@@ -324,43 +363,54 @@ export default function ptcExtension(pi: ExtensionAPI) {
 				return new Text(text, 0, 0);
 			},
 			parameters: Type.Object({
-				code: Type.String({
-					description:
-						"JavaScript program (top-level await). Available tools are global async functions — see the tool description for exact names and shapes.",
-				}),
+				code: Type.Optional(
+					Type.String({
+						description:
+							"JavaScript program (top-level await). Available tools are global async functions — see the tool description for exact names and shapes. Omit when `path` is given.",
+					}),
+				),
+				path: Type.Optional(
+					Type.String({
+						description:
+							"Rerun a previously saved ptc program instead of `code`: path to the program file (/tmp/ptc-*/user-program.mjs) or to its directory. Re-read from disk, so edits to the file are picked up.",
+					}),
+				),
 			}),
 			async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-				if (!params.code?.trim()) return errorResult("ptc: `code` is empty");
+				const code = typeof params.code === "string" ? params.code : "";
+				const path = typeof params.path === "string" ? params.path.trim() : "";
+				if (code.trim() && path) return errorResult("ptc: pass `code` or `path`, not both");
+				if (!code.trim() && !path) return errorResult("ptc: provide `code` (a JS program) or `path` (a saved program file/dir)");
 				try {
-				const { result, toolCalls, dir } = await runProgram(params.code, signal, ctx);
-				if (!result.ok) {
-					const raw = `${result.output}${result.output ? "\n\n" : ""}Program error: ${result.error ?? "unknown error"}${
-						result.stderr ? `\nProgram stderr:\n${result.stderr}` : ""
-					}\n\nProgram kept for inspection: ${dir}`;
-					const { text } = headTailCap(raw);
-					return {
-						content: [{ type: "text" as const, text }],
-						details: { ok: false, toolCalls, programDir: dir },
-						isError: true as const,
-					};
-				}
-				// Success: temp dir is no longer needed — delete it (fixes the leak).
-				await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-				const { text, capped } = headTailCap(result.output);
-				let fullOutputPath: string | undefined;
-				if (capped) {
-					fullOutputPath = join(tmpdir(), `ptc-output-${Date.now()}.txt`);
-					await writeFile(fullOutputPath, result.output).catch(() => undefined);
-				}
-				if (result.stderr) {
-					// Program succeeded but printed to stderr — surface a tail so the model isn't blind to warnings.
-					const tail = result.stderr.length > 2000 ? `…${result.stderr.slice(-2000)}` : result.stderr;
-					return {
-						content: [{ type: "text" as const, text: `${text}\n\nProgram stderr:\n${tail}` }],
-						details: { ok: true, toolCalls, outputChars: result.output.length, fullOutputPath },
-					};
-				}
-				return { content: [{ type: "text" as const, text }], details: { ok: true, toolCalls, outputChars: result.output.length, fullOutputPath } };
+					const { result, toolCalls, userPath } = await runProgram(path ? { path } : { code }, signal, ctx);
+					// Every result reports the saved program file so the model can rerun
+					// or tweak it by path without resending the code. Appended after
+					// capping so it is never dropped by head+tail.
+					const savedLine = `\n\nProgram file: ${userPath} (rerun: ptc { path: ${JSON.stringify(dirname(userPath))} })`;
+					if (!result.ok) {
+						const raw = `${result.output}${result.output ? "\n\n" : ""}Program error: ${result.error ?? "unknown error"}${
+							result.stderr ? `\nProgram stderr:\n${result.stderr}` : ""
+						}`;
+						const { text } = headTailCap(raw);
+						return {
+							content: [{ type: "text" as const, text: text + savedLine }],
+							details: { ok: false, toolCalls, programPath: userPath },
+							isError: true as const,
+						};
+					}
+					const { text, capped } = headTailCap(result.output);
+					let fullOutputPath: string | undefined;
+					if (capped) {
+						fullOutputPath = join(tmpdir(), `ptc-output-${Date.now()}.txt`);
+						await writeFile(fullOutputPath, result.output).catch(() => undefined);
+					}
+					const details = { ok: true, toolCalls, outputChars: result.output.length, fullOutputPath, programPath: userPath };
+					if (result.stderr) {
+						// Program succeeded but printed to stderr — surface a tail so the model isn't blind to warnings.
+						const tail = result.stderr.length > 2000 ? `…${result.stderr.slice(-2000)}` : result.stderr;
+						return { content: [{ type: "text" as const, text: `${text}\n\nProgram stderr:\n${tail}${savedLine}` }], details };
+					}
+					return { content: [{ type: "text" as const, text: text + savedLine }], details };
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : format(err);
 					return errorResult(msg);

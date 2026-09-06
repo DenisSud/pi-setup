@@ -18,8 +18,9 @@ Same trust level as the bash tool.
 
 ## Design decisions (agreed)
 
-1. **One tool: `ptc`** — a single parameter `code` (JavaScript, top-level
-   await). Runs in a Node child process. Hard timeout (default 120 s,
+1. **One tool: `ptc`** — parameter `code` (JavaScript, top-level await), or
+   `path` to run a previously saved program instead (mutually exclusive; see
+   11). Runs in a Node child process. Hard timeout (default 120 s,
    `PTC_TIMEOUT_MS` env override). stdout captured as the result, head+tail
    capped for the LLM, full output written to a file and its path reported.
 
@@ -81,10 +82,23 @@ Same trust level as the bash tool.
    module share globalThis. `require` does not exist — document `await
    import(...)` as the alternative.
 
-10. **Temp dir lifecycle.** One `mkdtemp` per run. Deleted on success; kept on
-   failure with its path in the error text (and `details.programDir`) so the
-   model can inspect `user-program.mjs` instead of debugging blind. (An earlier
-   version imported `rm` but never called it — dirs leaked.)
+10. **Program file lifecycle: kept, reported, rerunnable.** Every run writes
+   the user program to `/tmp/ptc-*/user-program.mjs` and reports its path in
+   the result text and `details.programPath` — on success and failure. The
+   run dir is never deleted: the path must stay valid for reruns. (An earlier
+   version deleted on success and leaked on failure; the leak fix is
+   superseded by this decision — dirs are ~2 KB and /tmp tmpfiles cleanup
+   reclaims them.)
+
+11. **Rerun by path.** `ptc { path }` runs a previously saved program — pass
+   the program file or its directory (results report the file, the rerun
+   hint shows the dir; both work). The file is re-read at call time, so edits
+   made via bash/edit tools are picked up — that is the iteration loop:
+   tweak the file, rerun by path, no code resend. Trust level is unchanged
+   (same as bash: any readable file can be executed). The wrapper always
+   runs from a fresh mkdtemp dir; the child's cwd is the program's own dir
+   in both modes, so cwd-relative behavior matches between first run and
+   rerun.
 
 ## Deferred (v2 if needed)
 
