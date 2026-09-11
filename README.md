@@ -52,7 +52,7 @@ pi install /path/to/pi-setup
 - `packages` is a **union** (your entries are preserved),
 - `auth.json`, `models.json`, `models-store.json` are **never touched**.
 
-Note: `defaultProvider: opencode-go` / `defaultModel: deepseek-v4-flash` are Denis's setup — the `opencode-go` provider definition lives in `models.json` which is intentionally not shipped. Adjust these two keys to your own provider/model after installing.
+Note: `defaultProvider: opencode-go` / `defaultModel: deepseek-v4.1-flash` are Denis's setup — the `opencode-go` provider definition lives in `models.json` which is intentionally not shipped. Adjust these two keys to your own provider/model after installing.
 
 ## Development workflow
 
