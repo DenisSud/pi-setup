@@ -2,7 +2,7 @@
  * consult — a "second opinion" tool for pi (Claude Code's consult-opus pattern)
  *
  * Registers the `consult` tool: the main agent can ask a frontier model
- * (kimi-k3 via the opencode-go provider, by default) to review a design,
+ * (glm-5.3 via the opencode-go provider, by default) to review a design,
  * architecture, or plan before committing to it.
  *
  * Usage posture: neutral. The prompt guidelines describe when consult is
@@ -25,11 +25,11 @@
  *     reasoning trace, token usage, and estimated cost in details so the
  *     agent can judge both the advice and the price.
  *
- * Cost: kimi-k3 on opencode-go (see opencode.ai/zen for current pricing).
+ * Cost: glm-5.3 on opencode-go (see opencode.ai/zen for current pricing).
  * A typical consult runs $0.005–0.03. The system
  * prompt is fully static and marked for caching (explicit cache_control
  * opt-in, since the catalog does not declare cacheControlFormat for
- * kimi-k3), so repeated consults hit the endpoint's prefix cache at
+ * glm-5.3), so repeated consults hit the endpoint's prefix cache at
  * the cacheRead rate. Default reasoning effort is
  * "high"; use "max" for the strongest critique (slower), "low" for cheap
  * quick sanity checks.
@@ -47,7 +47,7 @@ import { Type } from "typebox";
 /** Provider hosting the consultant model. */
 const PROVIDER = "opencode-go";
 /** Default consultant model. */
-const DEFAULT_MODEL = "kimi-k3";
+const DEFAULT_MODEL = "glm-5.3";
 
 /** Throttle for live progress updates (ms). */
 const UPDATE_THROTTLE_MS = 300;
@@ -114,9 +114,9 @@ export default function consultExtension(pi: ExtensionAPI) {
 		name: "consult",
 		label: "Consult",
 		description:
-			"Ask a frontier model (kimi-k3) for expert feedback on a design, architecture, or plan. It stress-tests the proposal, surfaces risks, and suggests simpler alternatives. The consulted model sees only what you pass in — it has no access to the repo or conversation, so include the full proposal text and any relevant code/constraints.",
+			"Ask a frontier model (glm-5.3) for expert feedback on a design, architecture, or plan. It stress-tests the proposal, surfaces risks, and suggests simpler alternatives. The consulted model sees only what you pass in — it has no access to the repo or conversation, so include the full proposal text and any relevant code/constraints.",
 		promptSnippet:
-			"Consult a frontier model (kimi-k3) for expert feedback on a design, architecture, or plan",
+			"Consult a frontier model (glm-5.3) for expert feedback on a design, architecture, or plan",
 		promptGuidelines: [
 			"Use consult when you need a second opinion from a much stronger model before committing: validating an architecture, stress-testing a design decision, choosing between alternatives, stuck on a recurring error, or before declaring consequential work done.",
 			"A concrete proposal helps, but it does not need to be polished — describe the design as precisely as you can, including what is still undecided; the consultant can still flag wrong constraints and missing risks.",
@@ -255,7 +255,7 @@ async function runConsult(
 
 	// ── prompt caching ──────────────────────────────────────────────────
 	// Only opt into cacheControlFormat if the model's catalog compat declares
-	// it. Forcing "anthropic" breaks providers (e.g. Console Go / kimi-k3)
+	// it. Forcing "anthropic" breaks providers (e.g. Console Go / glm-5.3)
 	// that reject the cache_control parameter outright.
 	// ── build the consult prompt ─────────────────────────────────────────
 	const reasoning = (params.reasoning ?? "high") as "low" | "high" | "max";

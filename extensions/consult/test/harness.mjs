@@ -18,7 +18,7 @@
  *   - fake stream (no network)  → answer + reasoning + usage + cost composed
  *   - fake stream provider error → isError result with errorMessage
  *   - fake stream aborted       → "aborted" result
- *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real kimi-k3 call, ~$0.01
+ *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real glm-5.3 call, ~$0.01
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -286,7 +286,7 @@ test("fake stream aborted → aborted result", async () => {
 	}
 });
 
-test("live kimi-k3 consult (opt-in)", async () => {
+test("live glm-5.3 consult (opt-in)", async () => {
 	if (!process.env.CONSULT_LIVE) {
 		console.log("  skip  (set CONSULT_LIVE=1 and CONSULT_KEY to run the live test)");
 		return;
