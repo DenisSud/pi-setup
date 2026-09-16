@@ -26,18 +26,36 @@ a supersession reason.
 ## Scope
 
 - All notes under `projects/` (fast-moving state).
-- Notes under `knowledge/` and `preferences/` touched in the last 30 days:
-  `git log --since="30 days ago" --name-only --pretty=format: | sort -u`
+- **All notes under `knowledge/` and `preferences/` — every run**, not just
+  recently-touched ones. These carry setup facts (paths, repos, services,
+  ports, config files) that rot silently while looking fresh; reality-checking
+  them is cheap. Staleness is not correlated with commit age.
 - Skip `archive/`, `index.md` files (checked separately), `SOUL.md`
   (human-authored), `memory.md` (checked for index consistency only).
+
+## What to verify — and what NOT to
+
+Verify only claims that are cheaply checkable against THIS machine or
+Denis's repos: his setup, not the world.
+
+- **DO verify** (read-only probes — `ls`, `test -d`, `grep`, `git -C <repo>
+  log/status/remote`, `systemctl is-active|is-enabled`, `list-timers`,
+  `which`, `ss -ltn`): file paths, repo locations, git remotes, hostnames
+  and IPs, services, systemd units, ports, deploy targets, tool
+  availability and versions, project structure and state.
+- **Do NOT re-verify external knowledge.** Library / API / framework /
+  algorithm behaviour (JAX, Flax, uv, Jupyter internals, ARC-AGI format,
+  ONNX, ...) was researched when written; re-checking it is expensive and
+  out of scope. Leave it alone unless a setup fact contradicts it.
+- Never build, install, download, or start/stop services. No GPU work.
 
 ## Checks (per note)
 
 1. **Contradictions** — does it conflict with another note or with a newer
    note on the same topic? Cross-check notes sharing a project or library.
-2. **Stale references** — verify cheaply against reality: do referenced
-   paths/repos/commands still exist (`ls`, `test -d`, `grep`)? Don't build
-   or run anything.
+2. **Stale references** — verify against reality: do referenced
+   paths/repos/commands/services still exist (`ls`, `test -d`, `grep`,
+   `systemctl`, `ss`)? Don't build or run anything.
 3. **Supersession** — is the note's content fully covered by a newer note?
    If yes → SUPERSEDE (old note: add `status: superseded` + link to
    replacement at top, `git mv` to `archive/`, update its index).
