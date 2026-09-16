@@ -46,6 +46,16 @@ languages.python = {
 - Ensure a `pyproject.toml` exists.
 - Keep `uv.lock` tracked.
 
+## CUDA / GPU Python projects
+
+PyTorch, JAX and cuTile work best from **pip CUDA wheels**, not nixpkgs (nixpkgs
+CUDA lags, and `cuda_tileiras` does not exist there). That needs three extra
+things on NixOS: a `patchelf` hook that rewrites the ELF interpreter of
+pip-shipped binaries (`ptxas`, `tileiras`, triton's `ptxas`), driver libs on
+`LD_LIBRARY_PATH` (`/run/opengl-driver/lib`), and `TRITON_LIBCUDA_PATH` for
+`torch.compile`. Copy the verified recipe + failure/fix table from memory:
+`knowledge/nixos-cuda-devenv.md`.
+
 ## Language servers
 
 For every language block, explicitly enable the LSP:
