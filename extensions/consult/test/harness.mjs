@@ -128,8 +128,14 @@ createExtension(pi);
 const tool = pi.tools.get("consult");
 assert(tool, "consult tool registered");
 
+const SESSION_ID = "01a0a91d-f8f6-7ef4-9430-cf878cd2b2c4";
+
 async function runTool(params, { registry, signal, onUpdate } = {}) {
-	const ctx = { modelRegistry: registry ?? makeRegistry({ provider: fakeProvider(() => {}) }), cwd: "/tmp" };
+	const ctx = {
+		modelRegistry: registry ?? makeRegistry({ provider: fakeProvider(() => {}) }),
+		cwd: "/tmp",
+		sessionManager: { getSessionId: () => SESSION_ID },
+	};
 	return tool.execute("call-1", params, signal, onUpdate, ctx);
 }
 
@@ -219,6 +225,40 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 		assert(captured.userText.includes("## Focus") && captured.userText.includes("Focus: risks"), "focus in user message");
 		assert(captured.userText.includes("## Proposal") && captured.userText.includes("## Question"), "proposal/question present");
 		assert(captured.options.maxTokens === undefined, `no output cap set, got ${captured.options.maxTokens}`);
+	} finally {
+		uninstallFakeApi();
+	}
+});
+
+test("opencode session headers attached (x-opencode-session / x-opencode-client)", async () => {
+	let capturedHeaders;
+	installFakeApi((model, context, options) => {
+		capturedHeaders = options.headers;
+		const stream = createAssistantMessageEventStream();
+		queueMicrotask(() => {
+			stream.push({
+				type: "done",
+				reason: "stop",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "ok" }],
+					api: "openai-completions",
+					provider: "opencode-go",
+					model: "deepseek-v4-pro",
+					usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+					stopReason: "stop",
+					timestamp: Date.now(),
+				},
+			});
+			stream.end();
+		});
+		return stream;
+	});
+	try {
+		const result = await runTool({ proposal: "P" }, { registry: makeRegistry({ provider: fakeProvider(() => {}) }) });
+		assert(result.isError !== true, "not an error");
+		assert(capturedHeaders["x-opencode-session"] === SESSION_ID, `session id header: ${capturedHeaders["x-opencode-session"]}`);
+		assert(capturedHeaders["x-opencode-client"] === "pi", "client header");
 	} finally {
 		uninstallFakeApi();
 	}

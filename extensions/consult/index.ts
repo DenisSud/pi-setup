@@ -257,12 +257,25 @@ async function runConsult(
 	// Only opt into cacheControlFormat if the model's catalog compat declares
 	// it. Forcing "anthropic" breaks providers (e.g. Console Go) that
 	// that reject the cache_control parameter outright.
+	// ── opencode session headers ───────────────────────────────────────
+	// opencode's gateway requires a stable session id (`x-opencode-session`)
+	// on every request for routing and prompt caching; without it the request
+	// dies with 400 MissingSessionID. pi's agent loop attaches these in
+	// `core/provider-attribution.ts` (and `x-opencode-client: pi`), but consult
+	// streams through pi-ai directly, bypassing that layer — so attach them
+	// here. Reuse the pi session id: this auxiliary call belongs to the same
+	// conversation, and the shared id keeps routing/caching on the same
+	// backend replica.
+	const sessionHeaders = {
+		"x-opencode-session": ctx.sessionManager.getSessionId(),
+		"x-opencode-client": "pi",
+	};
 	// ── build the consult prompt ─────────────────────────────────────────
 	const reasoning = (params.reasoning ?? "max") as "low" | "high" | "max";
 	const streamOptions: SimpleStreamOptions = {
 		signal: signal ?? undefined,
 		apiKey,
-		headers,
+		headers: { ...headers, ...sessionHeaders },
 		reasoning,
 		cacheRetention: "short",
 	};
