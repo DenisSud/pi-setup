@@ -65,10 +65,3 @@ adjust these to your provider/model after installing.
 
 Register the checkout as a local path (`pi install /path/to/pi-setup`) and edits
 apply on `/reload` or restart. Commit and push normally.
-
-## Intentionally not here
-
-- `~/.pi/agent/memory/` — my personal memory notes (a separate, private repo)
-- `~/.pi/agent/auth.json`, `models.json`, `models-store.json` — credentials and
-  private model configs
-- `sessions/`, `npm/`, `git/` — runtime state
