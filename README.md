@@ -1,71 +1,77 @@
 # pi-setup
 
-Denis's complete [pi](https://pi.dev) setup as a single installable package: skills, extensions, and shareable settings. One source of truth, one repo, no scattered packages.
+My complete [pi](https://pi.dev) setup as one installable package: skills,
+extensions and shareable settings. One source of truth, no scattered packages.
 
-> ⚠️ **Private repo.** The `homelab` skill contains real credentials (API keys, LAN/WAN access details). Do not make this repo public without redacting them first.
+> No secrets live here. Credential values stay in `~/.pi/agent/secrets.md`
+> (local, untracked); skills and notes contain only pointers to them.
 
 ## Contents
 
 ```
 ├── package.json          # pi package manifest (pi-package)
-├── settings.json         # shareable settings (see "Settings" below)
+├── settings.json         # shareable settings (see "Settings")
 ├── install.sh            # merges settings.json into ~/.pi/agent/settings.json
+├── global/AGENTS.md      # global instructions, symlinked to ~/.pi/agent/AGENTS.md
 ├── extensions/
-│   └── sysinfo/          # system info injected into the system prompt
+│   ├── sysinfo/          # machine facts injected into the system prompt
+│   ├── consult/          # second opinion from a frontier model
+│   ├── web-search/       # web_search / web_fetch tools, no local server
+│   └── ptc/              # programmatic tool calling (JS runner + built-ins)
 └── skills/
-    ├── codebase-design/  # deep-module design vocabulary
-    ├── cron-jobs/        # systemd-timer cron jobs on NixOS
-    ├── devenv-nix/       # devenv.nix standards
-    ├── grilling/         # stress-test plans and decisions
-    ├── handoff/          # handoff between sessions
-    ├── homelab/          # RPi/PC infra, Jellyfin, torrent pipeline
+    ├── codebase-design/                 # deep-module design vocabulary
+    ├── cron-jobs/                       # systemd-timer cron jobs
+    ├── devenv-nix/                      # devenv.nix standards
+    ├── grilling/                        # stress-test plans and decisions
+    ├── handoff/                         # handoff between sessions
+    ├── homelab/                         # find infra facts, act safely
     ├── improve-codebase-architecture/
-    ├── research/         # delegated research against primary sources
+    ├── memory-review/                   # periodic note consolidation
+    ├── research/                        # delegated research vs primary sources
     ├── resolving-merge-conflicts/
-    ├── subagents/        # delegate to fresh-context child agents
-    ├── tdd/              # test-driven development
-    └── writing-great-skills/
+    ├── subagents/                       # delegate to fresh-context child agents
+    ├── tdd/                             # test-driven development
+    └── writing-great-skills/            # how to write skills
 ```
 
 ## Install
 
 ```bash
-# 1. Install the package (skills + extensions)
-pi install ssh://git@git.sudakov.site:2223/DenisSud/pi-setup.git
+# 1. skills + extensions
+pi install git@github.com:DenisSud/pi-setup.git
 
-# 2. (Optional) Apply the shareable settings — merges, never clobbers
+# 2. (optional) shareable settings — merges, never clobbers
 ./install.sh
 ```
 
-Or clone and use a local path for live loading while developing:
+Or clone and register the checkout as a local path while developing:
 
 ```bash
-git clone git@git.sudakov.site:DenisSud/pi-setup.git
+git clone git@github.com:DenisSud/pi-setup.git
 pi install /path/to/pi-setup
 ```
 
 ### Settings
 
-`settings.json` ships opinionated preferences (`defaultModel`, `defaultProvider`, `defaultThinkingLevel`, `hideThinkingBlock`, `theme`) plus the `pi-web-search` npm package. `install.sh` merges it into your `~/.pi/agent/settings.json`:
+`settings.json` ships opinionated defaults (`defaultModel`, `defaultProvider`,
+`defaultThinkingLevel`, `hideThinkingBlock`, `theme`). `install.sh` merges them
+into your `~/.pi/agent/settings.json`:
 
-- your existing keys **win** (repo provides defaults only),
+- your existing keys **win** (the repo provides defaults only),
 - `packages` is a **union** (your entries are preserved),
 - `auth.json`, `models.json`, `models-store.json` are **never touched**.
 
-Note: `defaultProvider: opencode-go` / `defaultModel: deepseek-v4.1-flash` are Denis's setup — the `opencode-go` provider definition lives in `models.json` which is intentionally not shipped. Adjust these two keys to your own provider/model after installing.
+The shipped `defaultProvider: opencode-go` / `defaultModel` are my own setup —
+adjust these to your provider/model after installing.
 
-## Development workflow
+## Development
 
-The canonical remote is `git.sudakov.site`. On the PC the repo is checked out at `~/dev/pi-setup` and registered in `~/.pi/agent/settings.json` as a **local path** — edits apply immediately on `/reload` or restart, no re-pin needed. Changes are shared by pushing:
+Register the checkout as a local path (`pi install /path/to/pi-setup`) and edits
+apply on `/reload` or restart. Commit and push normally.
 
-```bash
-git add -A && git commit -m "..." && git push
-```
+## Intentionally not here
 
-## Personal (not shipped)
-
-The following intentionally stay out of this repo:
-
-- `~/.pi/agent/memory/` — personal memory notes, tracked in [`DenisSud/memory-notes`](https://git.sudakov.site/DenisSud/memory-notes)
-- `~/.pi/agent/auth.json`, `models.json`, `models-store.json` — credentials and private model configs
-- `sessions/`, `npm/` (installed deps), `git/` (pi's package clones)
+- `~/.pi/agent/memory/` — my personal memory notes (a separate, private repo)
+- `~/.pi/agent/auth.json`, `models.json`, `models-store.json` — credentials and
+  private model configs
+- `sessions/`, `npm/`, `git/` — runtime state

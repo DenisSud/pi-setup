@@ -4,11 +4,11 @@ Operating notes for AI agents working in this repo. Denis edits with pi; this fi
 
 ## What this repo is
 
-The `pi-setup` pi package: Denis's skills + extensions + shareable settings, installed via `pi install`. On the PC this checkout is registered in `~/.pi/agent/settings.json` as a **local path** — edits apply on `/reload` or restart, then are shared by pushing to `git.sudakov.site` (`DenisSud/pi-setup`).
+The `pi-setup` pi package: Denis's skills + extensions + shareable settings, installed via `pi install`. On the PC this checkout is registered in `~/.pi/agent/settings.json` as a **local path** — edits apply on `/reload` or restart, then are shared by pushing to GitHub (`DenisSud/pi-setup`).
 
 ## Hard rules
 
-- **Private repo, but keep secrets out anyway.** No passwords/API keys in this repo (memory notes included) — credential values live only in `~/.pi/agent/secrets.md` (local, untracked, mode 600); notes and skills hold pointers. Never paste secret values into notes, prompts, commits, or replies.
+- **Keep secrets out.** No passwords/API keys in this repo (memory notes included) — credential values live only in `~/.pi/agent/secrets.md` (local, untracked, mode 600); notes and skills hold pointers. Never paste secret values into notes, prompts, commits, or replies.
 - Extensions import only from the aliased packages: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-tui`, `typebox`. No new npm dependencies.
 - Run extension tests before committing: `extensions/<name>/test/run.sh harness` (no network). Consult also has a `live` mode (needs `CONSULT_KEY`, costs ~$0.01).
 - Commit with short descriptive messages; push after committing.
@@ -30,4 +30,4 @@ Tool `description`, `promptSnippet`, and `promptGuidelines` are rendered verbati
 
 ## Related but separate
 
-- `~/.pi/agent/memory/` — personal memory notes, a separate git repo (`DenisSud/memory-notes`), synced across devices. When you change behavior agents rely on (e.g. extension contracts), update the relevant notes there and push both repos.
+- `~/.pi/agent/memory/` — personal memory notes, a separate private git repo, synced across devices. When you change behavior agents rely on (e.g. extension contracts), update the relevant notes there and push both repos.
