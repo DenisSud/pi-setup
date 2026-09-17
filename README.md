@@ -3,9 +3,6 @@
 My complete [pi](https://pi.dev) setup as one installable package: skills,
 extensions and shareable settings. One source of truth, no scattered packages.
 
-> No secrets live here. Credential values stay in `~/.pi/agent/secrets.md`
-> (local, untracked); skills and notes contain only pointers to them.
-
 ## Contents
 
 ```
