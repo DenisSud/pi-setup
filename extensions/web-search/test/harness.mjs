@@ -1,42 +1,34 @@
 /**
- * Harness tests for the web-search extension.
+ * Harness tests for the web-search extension (SearXNG + system extractors).
  *
- * Drives the registered tools directly with a stubbed ExtensionAPI +
- * modelRegistry. Network calls go to globalThis.fetch, which is mocked —
- * no real requests unless the live test is opted in.
+ * Drives the registered tools directly against a stubbed ExtensionAPI and a
+ * mocked globalThis.fetch. The extraction tests run the REAL trafilatura /
+ * pandoc / pdftotext binaries (run.sh wraps node in a nix shell when they are
+ * not on PATH) — PATH is manipulated per test to force each branch.
  *
  * Tests:
- *   - pseudo-provider registration (auth wiring exists)
- *   - no auth                   → clean error with setup instructions
- *   - auth resolution throws    → clean error
- *   - search success            → formatted results + details
- *   - search empty results      → "No results found."
- *   - max_results default/clamp → 5 default, clamped to [1, 10]
- *   - search 401                → key guidance in the error
- *   - search 500                → status + body in the error
- *   - fetch success             → title/content/links formatted
- *   - fetch 401                 → key guidance in the error
- *   - network failure           → clean "request failed" error
- *   - abort                     → "aborted" error
- *   - live (WEB_SEARCH_LIVE=1, WEB_SEARCH_KEY=...): real ollama.com call
+ *   - tools + ptc binding registered
+ *   - search success / max_results clamp / time_range / empty / API error /
+ *     unreachable / abort
+ *   - HTML extraction (trafilatura), pandoc fallback, missing-extractor error
+ *   - PDF extraction (pdftotext)
+ *   - text/plain passthrough + truncation, unsupported content type
+ *   - live (WEB_SEARCH_LIVE=1): real local SearXNG search + real page fetch
  *
- * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
- * Requires node_modules symlinks set up by run.sh.
+ * Run: ./test/run.sh harness      (no network)
+ *      ./test/run.sh live         (needs the local SearXNG service)
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import createExtension, { OLLAMA_AUTH_PROVIDER } from "../index.ts";
+import createExtension from "../index.ts";
+import { listPtcTools } from "../../ptc/registry.ts";
 
-// ── isolated agent dir ──────────────────────────────────────────────────
-// The extension reads ~/.pi/agent/auth.json fresh on every call (the auth
-// fix). PI_CODING_AGENT_DIR redirects getAgentDir() to a temp dir so tests
-// never touch the real credentials and can simulate mid-session auth edits.
-const AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-web-search-test-"));
-process.env.PI_CODING_AGENT_DIR = AGENT_DIR;
-const AUTH_PATH = join(AGENT_DIR, "auth.json");
-process.on("exit", () => rmSync(AGENT_DIR, { recursive: true, force: true }));
+// The extension reads this per call; keep it fake so the search tests never
+// depend on a running instance. The live test sets it back.
+const REAL_BASE = process.env.SEARXNG_BASE_URL;
+process.env.SEARXNG_BASE_URL = "http://searx.test";
 
 // ── tiny test runner ──────────────────────────────────────────────────────
 
@@ -48,70 +40,96 @@ function test(name, fn) {
 	tests.push({ name, fn });
 }
 
-async function runTests() {
-	for (const t of tests) {
-		try {
-			await t.fn();
-			passed++;
-			console.log(`  ok    ${t.name}`);
-		} catch (err) {
-			failed++;
-			console.error(`  FAIL  ${t.name}`);
-			console.error(`        ${String(err.message).split("\n").slice(0, 8).join("\n        ")}`);
-		}
-	}
-	console.log(`\n${passed}/${tests.length} passed, ${failed} failed`);
-	process.exit(failed ? 1 : 0);
-}
-
 function assert(cond, msg) {
 	if (!cond) throw new Error(msg || "assertion failed");
 }
 
-// ── fixtures ──────────────────────────────────────────────────────────────
-
-function makePi() {
-	const tools = new Map();
-	const providers = new Map();
-	return {
-		registerTool: (def) => tools.set(def.name, def),
-		registerProvider: (id, config) => providers.set(id, config),
-		on: () => {},
-		tools,
-		providers,
-	};
-}
-
-function makeRegistry({ auth = "test-key", authError } = {}) {
-	return {
-		getApiKeyForProvider: async (id) => {
-			if (authError) throw authError;
-			if (id === OLLAMA_AUTH_PROVIDER) return auth;
-			return undefined;
-		},
-	};
-}
-
 const REAL_FETCH = globalThis.fetch;
-const SAMPLE_RESULTS = {
-	results: [
-		{ title: "First", url: "https://example.com/1", content: "First content" },
-		{ title: "Second", url: "https://example.com/2", content: "Second content" },
-	],
-};
+const REAL_PATH = process.env.PATH;
+
 function mockFetch(handler) {
 	globalThis.fetch = async (input, init) => handler(String(input), init);
 }
-// restore after each test even on failure
-const origTest = test;
-test = (name, fn) =>
-	origTest(name, async () => {
-		try {
-			await fn();
-		} finally {
-			globalThis.fetch = REAL_FETCH;
-		}
-	});
+
+function restoreEnv() {
+	globalThis.fetch = REAL_FETCH;
+	process.env.PATH = REAL_PATH;
+}
+
+function which(command) {
+	for (const dir of (process.env.PATH ?? "").split(":")) {
+		const candidate = join(dir, command);
+		if (existsSync(candidate)) return candidate;
+	}
+	return undefined;
+}
+
+function makePi() {
+	const tools = new Map();
+	return {
+		registerTool: (def) => tools.set(def.name, def),
+		registerProvider: () => {},
+		on: () => {},
+		tools,
+	};
+}
+
+async function runTool(tool, params, { signal } = {}) {
+	return tool.execute("call-1", params, signal, undefined, undefined);
+}
+
+// ── fixtures ──────────────────────────────────────────────────────────────
+
+const ARTICLE_HTML = `<!doctype html><html><head><title>Test Article</title></head>
+<body><header><nav>Home About Contact</nav></header>
+<article><h1>Test Article</h1>
+<p>SearXNG is a free internet metasearch engine which aggregates results from various search services and databases.</p>
+<p>Agents retrieve apples from the orchard every autumn, and the distinctive sentence about zebras is written here so the test can find it.</p>
+</article><footer>Copyright 2026</footer></body></html>`;
+
+const SEARX_RESPONSE = {
+	results: [
+		{ title: "First", url: "https://example.com/1", content: "First content", engine: "google cse" },
+		{ title: "Second", url: "https://example.com/2", content: "Second content", engine: "bing" },
+	],
+	unresponsive_engines: [["duckduckgo", "CAPTCHA"]],
+};
+
+function makeResponse({ url = "https://example.com/page", body = "", contentType = "text/html", status = 200 }) {
+	const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body, "utf-8");
+	return {
+		ok: status >= 200 && status < 300,
+		status,
+		statusText: status === 200 ? "OK" : "Error",
+		url,
+		headers: new Headers({ "content-type": contentType }),
+		arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+		text: async () => bytes.toString("utf-8"),
+		json: async () => JSON.parse(bytes.toString("utf-8")),
+	};
+}
+
+/** Minimal one-page PDF with a Helvetica text line. */
+function makePdf(text) {
+	const objects = {
+		1: "<< /Type /Catalog /Pages 2 0 R >>",
+		2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		3: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+		4: `<< /Length ${`BT /F1 18 Tf 72 720 Td (${text}) Tj ET`.length} >>\nstream\nBT /F1 18 Tf 72 720 Td (${text}) Tj ET\nendstream`,
+		5: "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+	};
+	let pdf = "%PDF-1.4\n";
+	const offsets = {};
+	for (let i = 1; i <= 5; i++) {
+		offsets[i] = pdf.length;
+		pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
+	}
+	const xref = pdf.length;
+	pdf += "xref\n0 6\n0000000000 65535 f \n";
+	for (let i = 1; i <= 5; i++) pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+	pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+	return Buffer.from(pdf, "latin1");
+}
 
 // ── registration ──────────────────────────────────────────────────────────
 
@@ -119,265 +137,193 @@ const pi = makePi();
 createExtension(pi);
 const search = pi.tools.get("web_search");
 const fetchTool = pi.tools.get("web_fetch");
-assert(search, "web_search tool registered");
-assert(fetchTool, "web_fetch tool registered");
 
-test("registers ollama-web pseudo-provider with env key auth", () => {
-	const config = pi.providers.get(OLLAMA_AUTH_PROVIDER);
-	assert(config, "provider registered");
-	assert(config.apiKey === "$OLLAMA_API_KEY", `apiKey config: ${config.apiKey}`);
-	assert(Array.isArray(config.models) && config.models.length === 0, "no models (never a chat provider)");
-});
-
-async function runTool(tool, params, { registry, signal } = {}) {
-	const ctx = { modelRegistry: registry ?? makeRegistry(), cwd: "/tmp" };
-	return tool.execute("call-1", params, signal, undefined, ctx);
-}
-
-// ── auth ──────────────────────────────────────────────────────────────────
-
-test("no auth → clean error with setup instructions", async () => {
-	const result = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
-	assert(result.isError === true, "isError");
-	assert(/OLLAMA_API_KEY/.test(result.content[0].text), "mentions env var");
-	assert(/ollama-web/.test(result.content[0].text), "mentions auth.json provider id");
-	assert(/ollama\.com\/settings\/keys/.test(result.content[0].text), "points at key creation");
-});
-
-test("auth resolution throws → clean error", async () => {
-	const result = await runTool(
-		search,
-		{ query: "x" },
-		{ registry: makeRegistry({ authError: new Error("credential store read failed") }) },
+test("registers web_search, web_fetch, and the ptc binding", () => {
+	assert(search, "web_search tool registered");
+	assert(fetchTool, "web_fetch tool registered");
+	assert(
+		listPtcTools().some((t) => t.name === "web_search"),
+		"web_search registered for ptc",
 	);
-	assert(result.isError === true, "isError");
-	assert(/credential store read failed/.test(result.content[0].text), "includes cause");
-});
-
-// ── fresh auth.json reads (the 401 regression: pi snapshots auth.json at
-//    startup, so mid-session key edits must be picked up per call) ────────
-
-function writeAuth(key) {
-	writeFileSync(AUTH_PATH, JSON.stringify({ [OLLAMA_AUTH_PROVIDER]: { type: "api_key", key } }));
-}
-
-test("key added to auth.json mid-session works without restart", async () => {
-	let captured;
-	mockFetch(async (_url, init) => {
-		captured = { init };
-		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
-	});
-	try {
-		// session started before the key existed: registry snapshot has nothing
-		const before = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
-		assert(before.isError === true, "no key anywhere → clean error");
-
-		writeAuth("fresh-key");
-		const after = await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "" }) });
-		assert(after.isError !== true, `works without restart: ${after.content[0].text}`);
-		assert(captured.init.headers.Authorization === "Bearer fresh-key", "fresh key used");
-	} finally {
-		rmSync(AUTH_PATH, { force: true });
-	}
-});
-
-test("rotated auth.json key wins over stale registry snapshot", async () => {
-	let captured;
-	mockFetch(async (_url, init) => {
-		captured = { init };
-		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
-	});
-	try {
-		writeAuth("rotated-key");
-		await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "stale-key" }) });
-		assert(captured.init.headers.Authorization === "Bearer rotated-key", "rotated key beats registry snapshot");
-	} finally {
-		rmSync(AUTH_PATH, { force: true });
-	}
-});
-
-test("template keys in auth.json are skipped — registry resolves them", async () => {
-	let captured;
-	mockFetch(async (_url, init) => {
-		captured = { init };
-		return { ok: true, status: 200, json: async () => SAMPLE_RESULTS };
-	});
-	try {
-		writeAuth("$OLLAMA_API_KEY");
-		await runTool(search, { query: "x" }, { registry: makeRegistry({ auth: "registry-key" }) });
-		assert(captured.init.headers.Authorization === "Bearer registry-key", "registry path used for templates");
-	} finally {
-		rmSync(AUTH_PATH, { force: true });
-	}
 });
 
 // ── web_search ────────────────────────────────────────────────────────────
 
-
 test("search success → formatted results + details", async () => {
 	let captured;
-	mockFetch(async (url, init) => {
-		captured = { url, init, body: JSON.parse(init.body) };
-		return {
-			ok: true,
-			status: 200,
-			json: async () => SAMPLE_RESULTS,
-		};
+	mockFetch(async (url) => {
+		captured = url;
+		return makeResponse({ body: JSON.stringify(SEARX_RESPONSE), contentType: "application/json" });
 	});
-	const result = await runTool(search, { query: "what is ollama?" });
+	const result = await runTool(search, { query: "what is searxng?" });
 	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(captured.url === "https://ollama.com/api/web_search", `url: ${captured.url}`);
-	assert(captured.init.headers.Authorization === "Bearer test-key", "bearer auth header");
-	assert(captured.body.query === "what is ollama?", "query in body");
-	assert(captured.body.max_results === 5, "default max_results");
+	const parsed = new URL(captured);
+	assert(parsed.origin === "http://searx.test" && parsed.pathname === "/search", `url: ${captured}`);
+	assert(parsed.searchParams.get("q") === "what is searxng?", "query param");
+	assert(parsed.searchParams.get("format") === "json", "json format");
 	assert(result.content[0].text.includes("1. First") && result.content[0].text.includes("URL: https://example.com/1"), "formatted");
 	assert(result.details.resultCount === 2, "resultCount");
-	assert(result.details.results[0].title === "First", "raw results in details");
+	assert(result.details.results[1].title === "Second", "raw results in details");
+	assert(result.details.unresponsive[0] === "duckduckgo: CAPTCHA", "unresponsive engines surfaced in details");
+});
+
+test("search max_results: default 5, clamped to 10", async () => {
+	const many = { results: Array.from({ length: 12 }, (_, i) => ({ title: `R${i}`, url: `https://example.com/${i}`, content: "" })) };
+	mockFetch(async () => makeResponse({ body: JSON.stringify(many), contentType: "application/json" }));
+	const def = await runTool(search, { query: "x" });
+	assert(def.details.resultCount === 5, `default: ${def.details.resultCount}`);
+	const high = await runTool(search, { query: "x", max_results: 50 });
+	assert(high.details.resultCount === 10, `clamped: ${high.details.resultCount}`);
+});
+
+test("search time_range → time_range param", async () => {
+	let captured;
+	mockFetch(async (url) => {
+		captured = new URL(url);
+		return makeResponse({ body: JSON.stringify(SEARX_RESPONSE), contentType: "application/json" });
+	});
+	await runTool(search, { query: "x", time_range: "week" });
+	assert(captured.searchParams.get("time_range") === "week", `time_range: ${captured.searchParams.get("time_range")}`);
 });
 
 test("search empty results → No results found.", async () => {
-	mockFetch(async () => ({ ok: true, status: 200, json: async () => ({ results: [] }) }));
+	mockFetch(async () => makeResponse({ body: JSON.stringify({ results: [] }), contentType: "application/json" }));
 	const result = await runTool(search, { query: "x" });
 	assert(result.isError !== true, "not an error");
 	assert(result.content[0].text === "No results found.", `text: ${result.content[0].text}`);
-	assert(result.details.resultCount === 0, "resultCount 0");
 });
 
-test("max_results defaults to 5, clamped to [1, 10]", async () => {
-	const bodies = [];
-	mockFetch(async (_url, init) => {
-		bodies.push(JSON.parse(init.body));
-		return { ok: true, status: 200, json: async () => ({ results: [] }) };
-	});
-	await runTool(search, { query: "x" });
-	await runTool(search, { query: "x", max_results: 99 });
-	await runTool(search, { query: "x", max_results: 0 });
-	await runTool(search, { query: "x", max_results: 3.7 });
-	assert(bodies[0].max_results === 5, `default: ${bodies[0].max_results}`);
-	assert(bodies[1].max_results === 10, `clamped high: ${bodies[1].max_results}`);
-	assert(bodies[2].max_results === 1, `clamped low: ${bodies[2].max_results}`);
-	assert(bodies[3].max_results === 4, `rounded: ${bodies[3].max_results}`);
-});
-
-test("search 401 → key guidance in the error", async () => {
-	mockFetch(async () => ({ ok: false, status: 401, statusText: "Unauthorized", text: async () => "unauthorized" }));
+test("search API error → status in clean error", async () => {
+	mockFetch(async () => makeResponse({ body: "boom", contentType: "text/plain", status: 503 }));
 	const result = await runTool(search, { query: "x" });
 	assert(result.isError === true, "isError");
-	assert(/unauthorized \(401\)/.test(result.content[0].text), `message: ${result.content[0].text}`);
-	assert(/settings\/keys/.test(result.content[0].text), "key creation hint");
+	assert(/503/.test(result.content[0].text), `mentions status: ${result.content[0].text}`);
 });
 
-test("search 500 → status + body in the error", async () => {
-	mockFetch(async () => ({
-		ok: false,
-		status: 500,
-		statusText: "Internal Server Error",
-		text: async () => "backend exploded",
-	}));
-	const result = await runTool(search, { query: "x" });
-	assert(result.isError === true, "isError");
-	assert(/status 500/.test(result.content[0].text) && /backend exploded/.test(result.content[0].text), `message: ${result.content[0].text}`);
-});
-
-// ── web_fetch ─────────────────────────────────────────────────────────────
-
-test("fetch success → title/content/links formatted", async () => {
-	let captured;
-	mockFetch(async (url, init) => {
-		captured = { url, body: JSON.parse(init.body) };
-		return {
-			ok: true,
-			status: 200,
-			json: async () => ({
-				title: "Example",
-				content: "Page body here",
-				links: ["https://example.com/a", "https://example.com/b"],
-			}),
-		};
-	});
-	const result = await runTool(fetchTool, { url: "https://example.com" });
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(captured.url === "https://ollama.com/api/web_fetch", `url: ${captured.url}`);
-	assert(captured.body.url === "https://example.com", "url in body");
-	const text = result.content[0].text;
-	assert(text.includes("Title: Example") && text.includes("Page body here"), "title + content");
-	assert(text.includes("Links found: 2") && text.includes("  - https://example.com/a"), "links listed");
-	assert(result.details.title === "Example" && result.details.links.length === 2, "details");
-});
-
-test("fetch caps listed links at 10 but reports full count", async () => {
-	const many = Array.from({ length: 25 }, (_, i) => `https://example.com/${i}`);
-	mockFetch(async () => ({ ok: true, status: 200, json: async () => ({ title: "t", content: "c", links: many }) }));
-	const result = await runTool(fetchTool, { url: "https://example.com" });
-	assert(result.isError !== true, "not an error");
-	assert(result.content[0].text.includes("Links found: 25"), "full count");
-	assert(!result.content[0].text.includes("https://example.com/24"), "only 10 links listed");
-});
-
-test("fetch 401 → key guidance in the error", async () => {
-	mockFetch(async () => ({ ok: false, status: 401, statusText: "Unauthorized" }));
-	const result = await runTool(fetchTool, { url: "https://example.com" });
-	assert(result.isError === true, "isError");
-	assert(/unauthorized \(401\)/.test(result.content[0].text), `message: ${result.content[0].text}`);
-});
-
-test("fetch error body with error field is surfaced", async () => {
-	mockFetch(async () => ({
-		ok: false,
-		status: 400,
-		statusText: "Bad Request",
-		json: async () => ({ error: "invalid url" }),
-	}));
-	const result = await runTool(fetchTool, { url: "not-a-url" });
-	assert(result.isError === true, "isError");
-	assert(/invalid url/.test(result.content[0].text), `message: ${result.content[0].text}`);
-});
-
-// ── failure modes ─────────────────────────────────────────────────────────
-
-test("network failure → clean request-failed error", async () => {
+test("search unreachable → SearXNG setup hint", async () => {
 	mockFetch(async () => {
-		throw new Error("fetch failed: ECONNREFUSED");
+		throw new TypeError("fetch failed");
 	});
 	const result = await runTool(search, { query: "x" });
 	assert(result.isError === true, "isError");
-	assert(/request failed/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	assert(/cannot reach SearXNG/.test(result.content[0].text), `message: ${result.content[0].text}`);
+	assert(/web-search\.nix/.test(result.content[0].text), "points at the nixos module");
 });
 
-test("abort → aborted error", async () => {
+test("search abort → aborted error", async () => {
 	const controller = new AbortController();
-	mockFetch(async (_url, init) => {
-		assert(init.signal.aborted === false, "signal starts live");
-		controller.abort();
-		const e = new Error("This operation was aborted");
-		e.name = "AbortError";
-		throw e;
+	controller.abort();
+	mockFetch(async () => {
+		throw Object.assign(new Error("aborted"), { name: "AbortError" });
 	});
 	const result = await runTool(search, { query: "x" }, { signal: controller.signal });
 	assert(result.isError === true, "isError");
 	assert(/aborted/.test(result.content[0].text), `message: ${result.content[0].text}`);
 });
 
-// ── live (opt-in) ─────────────────────────────────────────────────────────
+// ── web_fetch: HTML ───────────────────────────────────────────────────────
 
-test("live ollama.com search + fetch (opt-in)", async () => {
-	if (!process.env.WEB_SEARCH_LIVE) {
-		console.log("  skip  (set WEB_SEARCH_LIVE=1 and WEB_SEARCH_KEY to run the live test)");
-		return;
-	}
-	const key = process.env.WEB_SEARCH_KEY;
-	assert(key, "WEB_SEARCH_KEY required for live test");
-	const registry = makeRegistry({ auth: key });
-
-	const s = await runTool(search, { query: "ollama web search api", max_results: 3 }, { registry });
-	assert(s.isError !== true, `search not an error: ${s.content[0].text}`);
-	assert(s.details.resultCount > 0, "got results");
-	console.log(`        search: ${s.details.resultCount} results, first: ${s.details.results[0].url}`);
-
-	const f = await runTool(fetchTool, { url: s.details.results[0].url }, { registry });
-	assert(f.isError !== true, `fetch not an error: ${f.content[0].text}`);
-	assert(f.details.title, "got title");
-	console.log(`        fetch: "${f.details.title}" (${f.details.links?.length ?? 0} links)`);
+test("fetch HTML → trafilatura markdown extraction", async () => {
+	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
+	const result = await runTool(fetchTool, { url: "https://example.com/article" });
+	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+	assert(result.details.method === "trafilatura", `method: ${result.details.method}`);
+	assert(result.details.title === "Test Article", `title: ${result.details.title}`);
+	assert(result.details.content.includes("distinctive sentence about zebras"), "article body extracted");
+	assert(!result.details.content.includes("Home About Contact"), "nav stripped");
+	assert(result.content[0].text.startsWith("Title: Test Article"), "formatted text");
 });
 
-runTests();
+test("fetch HTML → pandoc fallback when trafilatura is unavailable", async () => {
+	const pandocPath = which("pandoc");
+	assert(pandocPath, "pandoc must be on PATH for the fallback test");
+	const dir = mkdtempSync(join(tmpdir(), "pi-web-search-bin-"));
+	symlinkSync(pandocPath, join(dir, "pandoc"));
+	process.env.PATH = dir;
+	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
+	const result = await runTool(fetchTool, { url: "https://example.com/article" });
+	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+	assert(result.details.method === "pandoc", `method: ${result.details.method}`);
+	assert(/zebras/.test(result.details.content), "pandoc content present");
+});
+
+test("fetch HTML → missing extractors give an actionable error", async () => {
+	process.env.PATH = "/nonexistent";
+	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
+	const result = await runTool(fetchTool, { url: "https://example.com/article" });
+	assert(result.isError === true, "isError");
+	assert(/not installed|no extractable content/.test(result.content[0].text), `message: ${result.content[0].text}`);
+});
+
+// ── web_fetch: PDF + plain text ───────────────────────────────────────────
+
+test("fetch PDF → pdftotext extraction", async () => {
+	mockFetch(async () =>
+		makeResponse({
+			url: "https://example.com/paper.pdf",
+			body: makePdf("PDF fixture sentence about zebras."),
+			contentType: "application/pdf",
+		}),
+	);
+	const result = await runTool(fetchTool, { url: "https://example.com/paper.pdf" });
+	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+	assert(result.details.method === "pdftotext", `method: ${result.details.method}`);
+	assert(/zebras/.test(result.details.content), `content: ${result.details.content}`);
+});
+
+test("fetch text/plain → passthrough with truncation cap", async () => {
+	mockFetch(async () => makeResponse({ url: "https://example.com/big.txt", body: "a".repeat(130_000), contentType: "text/plain" }));
+	const result = await runTool(fetchTool, { url: "https://example.com/big.txt" });
+	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+	assert(result.details.method === "text", `method: ${result.details.method}`);
+	assert(result.details.truncated === true, "truncated flag");
+	assert(result.details.content.endsWith("[truncated at 120000 chars]"), "truncation marker");
+});
+
+test("fetch unsupported content type → clean error", async () => {
+	mockFetch(async () => makeResponse({ body: "binary", contentType: "application/octet-stream" }));
+	const result = await runTool(fetchTool, { url: "https://example.com/blob" });
+	assert(result.isError === true, "isError");
+	assert(/unsupported content type/.test(result.content[0].text), `message: ${result.content[0].text}`);
+});
+
+test("fetch HTTP error status → clean error", async () => {
+	mockFetch(async () => makeResponse({ status: 404 }));
+	const result = await runTool(fetchTool, { url: "https://example.com/missing" });
+	assert(result.isError === true, "isError");
+	assert(/404/.test(result.content[0].text), `message: ${result.content[0].text}`);
+});
+
+// ── live test (opt-in, needs the local SearXNG service) ───────────────────
+
+if (process.env.WEB_SEARCH_LIVE === "1") {
+	test("live: real SearXNG search", async () => {
+		process.env.SEARXNG_BASE_URL = REAL_BASE ?? "http://127.0.0.1:8888";
+		const result = await runTool(search, { query: "python typing module", max_results: 3 });
+		assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+		assert(result.details.resultCount > 0, `got results: ${result.content[0].text.slice(0, 200)}`);
+	});
+	test("live: real page fetch", async () => {
+		const result = await runTool(fetchTool, { url: "https://example.com/" });
+		assert(result.isError !== true, `not an error: ${result.content[0].text}`);
+		assert(result.details.content.includes("documentation examples"), `content: ${result.details.content.slice(0, 200)}`);
+	});
+}
+
+// ── run ───────────────────────────────────────────────────────────────────
+
+for (const t of tests) {
+	try {
+		await t.fn();
+		passed++;
+		console.log(`  ok    ${t.name}`);
+	} catch (err) {
+		failed++;
+		console.error(`  FAIL  ${t.name}`);
+		console.error(`        ${String(err.message).split("\n").slice(0, 8).join("\n        ")}`);
+	} finally {
+		restoreEnv();
+	}
+}
+console.log(`\n${passed}/${tests.length} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);
