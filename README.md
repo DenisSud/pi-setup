@@ -13,7 +13,7 @@ extensions and shareable settings. One source of truth, no scattered packages.
 ├── extensions/
 │   ├── sysinfo/          # machine facts injected into the system prompt
 │   ├── consult/          # second opinion from a frontier model
-│   ├── web-search/       # web_search / web_fetch tools, no local server
+│   ├── web-search/       # web_search / web_fetch (local SearXNG + trafilatura)
 │   └── ptc/              # programmatic tool calling (JS runner + built-ins)
 └── skills/
     ├── codebase-design/                 # deep-module design vocabulary
@@ -30,6 +30,10 @@ extensions and shareable settings. One source of truth, no scattered packages.
     ├── tdd/                             # test-driven development
     └── writing-great-skills/            # how to write skills
 ```
+
+`web-search` expects a SearXNG instance (`SEARXNG_BASE_URL`, default
+`http://127.0.0.1:8888`) and the `trafilatura` + `pdftotext`/`pandoc` binaries
+for `web_fetch` (my NixOS module for that lives in the nixos-config repo).
 
 ## Install
 
