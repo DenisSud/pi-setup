@@ -210,18 +210,17 @@ async function runConsult(
 ): Promise<{
 	content: { type: "text"; text: string }[];
 	details: Record<string, unknown>;
-	isError?: boolean;
 }> {
-	const errorResult = (text: string, details: Record<string, unknown> = {}) => ({
-		content: [{ type: "text", text }],
-		details,
-		isError: true,
-	});
+	// pi marks a tool error only when execute throws; an `isError` field on a
+	// returned result is ignored. `fail` makes that throw explicit at call sites.
+	const fail = (text: string): never => {
+		throw new Error(text);
+	};
 
 	// ── resolve provider + model from pi's live registry ─────────────────
 	const allModels = ctx.modelRegistry.getAll();
 	if (!allModels.some((m) => m.provider === PROVIDER)) {
-		return errorResult(
+		return fail(
 			`consult: provider "${PROVIDER}" is not registered in this pi setup. Check models.json / the model catalog.`,
 		);
 	}
@@ -232,7 +231,7 @@ async function runConsult(
 			.filter((m) => m.provider === PROVIDER && m.input?.includes("text"))
 			.map((m) => m.id)
 			.join(", ");
-		return errorResult(
+		return fail(
 			`consult: model "${requested}" not found on provider "${PROVIDER}". Available text models: ${available}`,
 		);
 	}
@@ -240,16 +239,12 @@ async function runConsult(
 	// ── resolve auth the way pi does ─────────────────────────────────────
 	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 	if (!auth.ok) {
-		return errorResult(`consult: failed to resolve auth for "${PROVIDER}": ${auth.error}`, {
-			model: model.id,
-			provider: PROVIDER,
-		});
+		return fail(`consult: failed to resolve auth for "${PROVIDER}": ${auth.error}`);
 	}
 	const { apiKey, headers } = auth;
 	if (!apiKey) {
-		return errorResult(
+		return fail(
 			`consult: no API key configured for provider "${PROVIDER}". Configure it in auth.json or via the provider login flow.`,
-			{ model: model.id, provider: PROVIDER },
 		);
 	}
 
@@ -322,11 +317,10 @@ async function runConsult(
 
 		if (result.stopReason === "error" || result.stopReason === "aborted") {
 			if (signal?.aborted) {
-				return errorResult("consult: aborted.", { model: model.id, provider: PROVIDER, stopReason: result.stopReason });
+				return fail("consult: aborted.");
 			}
-			return errorResult(
+			return fail(
 				`consult: the model returned an error: ${result.errorMessage ?? result.stopReason}`,
-				{ model: model.id, provider: PROVIDER, stopReason: result.stopReason },
 			);
 		}
 
@@ -343,11 +337,7 @@ async function runConsult(
 
 		const finalAnswer = contentText || answer.trim();
 		if (!finalAnswer) {
-			return errorResult("consult: the model returned an empty answer.", {
-				model: model.id,
-				provider: PROVIDER,
-				stopReason: result.stopReason,
-			});
+			return fail("consult: the model returned an empty answer.");
 		}
 
 		const usage = result.usage;
@@ -381,9 +371,9 @@ async function runConsult(
 			},
 		};
 	} catch (err) {
-		if (signal?.aborted) {
-			return errorResult("consult: aborted.", { model: model.id, provider: PROVIDER });
-		}
-		return errorResult(`consult: request failed: ${errMessage(err)}`, { model: model.id, provider: PROVIDER });
+		// `fail` throws inside the try; rethrow so it isn't wrapped a second time.
+		if (err instanceof Error && err.message.startsWith("consult:")) throw err;
+		if (signal?.aborted) throw new Error("consult: aborted.");
+		throw new Error(`consult: request failed: ${errMessage(err)}`);
 	}
 }

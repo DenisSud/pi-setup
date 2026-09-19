@@ -136,7 +136,16 @@ async function runTool(params, { registry, signal, onUpdate } = {}) {
 		cwd: "/tmp",
 		sessionManager: { getSessionId: () => SESSION_ID },
 	};
-	return tool.execute("call-1", params, signal, onUpdate, ctx);
+	let result;
+	try {
+		result = await tool.execute("call-1", params, signal, onUpdate, ctx);
+	} catch (err) {
+		// pi's contract: execute errors are signaled by throwing, and pi wraps
+		// the thrown message into this result shape (isError: true, no details).
+		return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], details: {}, isError: true };
+	}
+	if ("isError" in result) throw new Error("execute returned `isError` — pi ignores that field; throw instead");
+	return result;
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────

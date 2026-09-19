@@ -107,8 +107,17 @@ function runTool(ptc, code, signal) {
 }
 
 /** Execute with full params (code/path) and return the tool result object. */
-function runToolParams(ptc, params, signal) {
-	return ptc.execute("test-call-id", params, signal, undefined, { modelRegistry: {} });
+async function runToolParams(ptc, params, signal) {
+	let result;
+	try {
+		result = await ptc.execute("test-call-id", params, signal, undefined, { modelRegistry: {} });
+	} catch (err) {
+		// pi's contract: execute errors are signaled by throwing, and pi wraps
+		// the thrown message into this result shape (isError: true, no details).
+		return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], details: {}, isError: true };
+	}
+	if ("isError" in result) throw new Error("execute returned `isError` — pi ignores that field; throw instead");
+	return result;
 }
 
 let dir;
@@ -365,7 +374,7 @@ test("web_search ptc binding: registered with signature, runs without network on
 	const { ptc } = await setup();
 	const reg = getPtcTool("web_search");
 	assert(reg, "web_search in registry");
-	assert(reg.signature.includes("{ query, max_results? }"), "signature documented");
+	assert(reg.signature.includes("{ query, max_results?, time_range? }"), "signature documented");
 	assert(ptc.description.includes("results: {title,url,content}[]"), "signature rendered into description");
 	// No live call: auth is environment-dependent; the fan-out behavior of the
 	// runner is already covered by the read/grep/find tests above.

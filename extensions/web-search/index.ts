@@ -375,8 +375,10 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 				text.setText(theme.fg("warning", `Searching the web for "${truncate(details?.query ?? "", 80)}"…`));
 				return text;
 			}
-			if (result.isError) {
-				text.setText(theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_search failed"));
+			if (context.isError) {
+				text.setText(
+					theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_search failed"),
+				);
 				return text;
 			}
 
@@ -394,22 +396,12 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			return text;
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-			const errorResult = (text: string) => ({
-				content: [{ type: "text" as const, text }],
-				details: {} as Record<string, never>,
-				isError: true as const,
-			});
-
+			// pi marks a tool error only when execute throws; an `isError` field on
+			// a returned result is ignored. Let failures propagate with their text.
 			const maxResults = clampCount(params.max_results);
-			let results: SearchResult[];
-			let unresponsive: UnresponsiveEngine[];
-			try {
-				({ results, unresponsive } = await withSearchSlot(() =>
-					searxSearch(params.query, maxResults, params.time_range, signal),
-				));
-			} catch (err) {
-				return errorResult(errMessage(err));
-			}
+			const { results, unresponsive } = await withSearchSlot(() =>
+				searxSearch(params.query, maxResults, params.time_range, signal),
+			);
 
 			const formatted =
 				results
@@ -475,8 +467,10 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 				text.setText(theme.fg("warning", `Fetching ${truncate(details?.url ?? "", 80)}…`));
 				return text;
 			}
-			if (result.isError) {
-				text.setText(theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_fetch failed"));
+			if (context.isError) {
+				text.setText(
+					theme.fg("error", result.content[0]?.type === "text" ? result.content[0].text : "web_fetch failed"),
+				);
 				return text;
 			}
 
@@ -491,18 +485,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			return text;
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
-			const errorResult = (text: string) => ({
-				content: [{ type: "text" as const, text }],
-				details: {} as Record<string, never>,
-				isError: true as const,
-			});
-
-			let result: FetchResult;
-			try {
-				result = await fetchAndExtract(params.url, signal);
-			} catch (err) {
-				return errorResult(errMessage(err));
-			}
+			const result = await fetchAndExtract(params.url, signal);
 
 			const formatted = [`Title: ${result.title}`, "", "Content:", result.content].join("\n");
 

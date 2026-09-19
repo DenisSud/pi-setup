@@ -152,9 +152,8 @@ interface PtcDone {
 	error?: string;
 }
 
-function errorResult(text: string) {
-	return { content: [{ type: "text" as const, text }], details: {}, isError: true as const };
-}
+// pi marks a tool error only when execute throws; an `isError` field on a
+// returned result is ignored. Errors below are thrown for that reason.
 
 async function runProgram(
 	{ code, path }: { code?: string; path?: string },
@@ -379,8 +378,8 @@ export default function ptcExtension(pi: ExtensionAPI) {
 			async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 				const code = typeof params.code === "string" ? params.code : "";
 				const path = typeof params.path === "string" ? params.path.trim() : "";
-				if (code.trim() && path) return errorResult("ptc: pass `code` or `path`, not both");
-				if (!code.trim() && !path) return errorResult("ptc: provide `code` (a JS program) or `path` (a saved program file/dir)");
+				if (code.trim() && path) throw new Error("ptc: pass `code` or `path`, not both");
+				if (!code.trim() && !path) throw new Error("ptc: provide `code` (a JS program) or `path` (a saved program file/dir)");
 				try {
 					const { result, toolCalls, userPath } = await runProgram(path ? { path } : { code }, signal, ctx);
 					// Every result reports the saved program file so the model can rerun
@@ -392,11 +391,7 @@ export default function ptcExtension(pi: ExtensionAPI) {
 							result.stderr ? `\nProgram stderr:\n${result.stderr}` : ""
 						}`;
 						const { text } = headTailCap(raw);
-						return {
-							content: [{ type: "text" as const, text: text + savedLine }],
-							details: { ok: false, toolCalls, programPath: userPath },
-							isError: true as const,
-						};
+						throw new Error(text + savedLine);
 					}
 					const { text, capped } = headTailCap(result.output);
 					let fullOutputPath: string | undefined;
@@ -412,8 +407,7 @@ export default function ptcExtension(pi: ExtensionAPI) {
 					}
 					return { content: [{ type: "text" as const, text: text + savedLine }], details };
 				} catch (err) {
-					const msg = err instanceof Error ? err.message : format(err);
-					return errorResult(msg);
+					throw err instanceof Error ? err : new Error(format(err));
 				}
 			},
 		});

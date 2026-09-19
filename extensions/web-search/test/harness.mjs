@@ -75,7 +75,16 @@ function makePi() {
 }
 
 async function runTool(tool, params, { signal } = {}) {
-	return tool.execute("call-1", params, signal, undefined, undefined);
+	let result;
+	try {
+		result = await tool.execute("call-1", params, signal, undefined, undefined);
+	} catch (err) {
+		// pi's contract: execute errors are signaled by throwing, and pi wraps
+		// the thrown message into this result shape (isError: true, no details).
+		return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], details: {}, isError: true };
+	}
+	if ("isError" in result) throw new Error("execute returned `isError` — pi ignores that field; throw instead");
+	return result;
 }
 
 // ── fixtures ──────────────────────────────────────────────────────────────
