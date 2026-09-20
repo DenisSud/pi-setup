@@ -24,7 +24,7 @@ extensions and shareable settings. One source of truth, no scattered packages.
     ├── homelab/                         # find infra facts, act safely
     ├── improve-codebase-architecture/
     ├── memory-review/                   # periodic note consolidation
-    ├── research/                        # delegated research vs primary sources
+    ├── research/                        # evidence-gated graph research + HTML report
     ├── resolving-merge-conflicts/
     ├── subagents/                       # delegate to fresh-context child agents
     ├── tdd/                             # test-driven development
