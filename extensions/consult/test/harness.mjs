@@ -18,7 +18,7 @@
  *   - fake stream (no network)  → answer + reasoning + usage + cost composed
  *   - fake stream provider error → isError result with errorMessage
  *   - fake stream aborted       → "aborted" result
- *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real deepseek-v4-pro call, ~$0.01
+ *   - live (CONSULT_LIVE=1, CONSULT_KEY=sk-...): real mimo-v2.6-pro call, ~$0.01
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -60,22 +60,22 @@ function assert(cond, msg) {
 
 // ── fixtures ──────────────────────────────────────────────────────────────
 
-const DEEPSEEK_V4_PRO = {
-	id: "deepseek-v4-pro",
-	name: "DeepSeek V4 Pro",
+const MIMO_V2_6_PRO = {
+	id: "mimo-v2.6-pro",
+	name: "MiMo-V2.6-Pro",
 	api: "openai-completions",
 	provider: "opencode-go",
 	baseUrl: "https://opencode.ai/zen/go/v1",
 	reasoning: true,
 	input: ["text"],
 	cost: { input: 0.435, output: 0.87, cacheRead: 0.003625, cacheWrite: 0 },
-	contextWindow: 1000000,
+	contextWindow: 1048576,
 	maxTokens: 131072,
 };
 
-function makeRegistry({ provider, model = DEEPSEEK_V4_PRO, listed, auth = { ok: true, apiKey: "sk-test-key" } }) {
+function makeRegistry({ provider, model = MIMO_V2_6_PRO, listed, auth = { ok: true, apiKey: "sk-test-key" } }) {
 	return {
-		getAll: () => (provider ? (listed ?? (model ? [model] : [DEEPSEEK_V4_PRO])) : []),
+		getAll: () => (provider ? (listed ?? (model ? [model] : [MIMO_V2_6_PRO])) : []),
 		find: () => model,
 		getApiKeyAndHeaders: async () => auth,
 	};
@@ -161,7 +161,7 @@ test("model not found → error lists available models", async () => {
 	const result = await runTool({ proposal: "x", model: "nonexistent-model" }, { registry });
 	assert(result.isError === true, "isError");
 	assert(/nonexistent-model/.test(result.content[0].text), "names the requested model");
-	assert(/deepseek-v4-pro/.test(result.content[0].text), "lists available models");
+	assert(/mimo-v2\.6-pro/.test(result.content[0].text), "lists available models");
 });
 
 test("no auth → clean error", async () => {
@@ -188,7 +188,7 @@ test("fake stream → answer, reasoning, usage, cost composed; static system pro
 		],
 		api: "openai-completions",
 		provider: "opencode-go",
-		model: "deepseek-v4-pro",
+		model: "mimo-v2.6-pro",
 		usage: { input: 1200, output: 800, cacheRead: 500, cacheWrite: 0, reasoning: 500 },
 		stopReason: "stop",
 		timestamp: Date.now(),
@@ -253,7 +253,7 @@ test("opencode session headers attached (x-opencode-session / x-opencode-client)
 					content: [{ type: "text", text: "ok" }],
 					api: "openai-completions",
 					provider: "opencode-go",
-					model: "deepseek-v4-pro",
+					model: "mimo-v2.6-pro",
 					usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
 					stopReason: "stop",
 					timestamp: Date.now(),
@@ -282,7 +282,7 @@ test("fake stream provider error → isError with errorMessage", async () => {
 				content: [],
 				api: "openai-completions",
 				provider: "opencode-go",
-				model: "deepseek-v4-pro",
+				model: "mimo-v2.6-pro",
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				stopReason: "error",
 				errorMessage: "Provider returned an error stop reason",
@@ -312,7 +312,7 @@ test("fake stream aborted → aborted result", async () => {
 				content: [],
 				api: "openai-completions",
 				provider: "opencode-go",
-				model: "deepseek-v4-pro",
+				model: "mimo-v2.6-pro",
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				stopReason: "aborted",
 				timestamp: Date.now(),
@@ -335,7 +335,7 @@ test("fake stream aborted → aborted result", async () => {
 	}
 });
 
-test("live deepseek-v4-pro consult (opt-in)", async () => {
+test("live mimo-v2.6-pro consult (opt-in)", async () => {
 	if (!process.env.CONSULT_LIVE) {
 		console.log("  skip  (set CONSULT_LIVE=1 and CONSULT_KEY to run the live test)");
 		return;
