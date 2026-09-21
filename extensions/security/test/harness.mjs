@@ -345,6 +345,16 @@ test("guard: tool inputs", () => {
 	assert(checkToolInput("ptc", { code: "const {output} = await secrets_sh({profile: 'forgejo', command: 'git push'});" }, GUARD) === null, "secrets_sh allowed");
 });
 
+test("guard: file tools check the path, not the content", () => {
+	assert(checkToolInput("edit", { path: "/home/denis/.config/rbw/rbw.json", oldText: "x", newText: "y" }, GUARD), "editing a store path blocked");
+	assert(
+		checkToolInput("write", { path: "/home/denis/.dotfiles-shell/zsh/.zshrc", content: "rm ~/.env.age # was sourced" }, GUARD) === null,
+		"writing docs/config text mentioning a store is fine",
+	);
+	assert(checkToolInput("grep", { path: "/home/denis/dev/pi-setup", pattern: "rbw" }, GUARD) === null, "searching a repo for the word rbw is fine");
+	assert(checkToolInput("grep", { path: "/home/denis/.config/rbw", pattern: "x" }, GUARD), "grepping inside a store blocked");
+});
+
 test("guard: extraPatterns from config and disabled switch", () => {
 	const settings = { disabled: false, extraPatterns: ["rm\\s+-rf\\s+/"] };
 	assert(checkToolInput("bash", { command: "rm -rf /" }, settings), "extra pattern");
