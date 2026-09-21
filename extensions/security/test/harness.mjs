@@ -371,8 +371,18 @@ test("bash override: stock behavior preserved without `secrets`", async () => {
 test("bash override: description and guidelines carry the contract", () => {
 	assertMatch(bashTool.description, /secrets: "<profile>"/, "description mentions secrets param");
 	assertMatch(bashTool.description, /«redacted:NAME»/, "description mentions marker");
+	// the model must be able to pick a profile without guessing
+	for (const name of ["jellyfin", "forgejo", "ollama", "locked"]) {
+		assertMatch(bashTool.description, new RegExp(name), `description lists profile ${name}`);
+	}
+	assertMatch(bashTool.description, /Jellyfin API token/, "description carries profile descriptions");
+	assertMatch(bashTool.parameters.properties.secrets.description, /available: jellyfin, forgejo/, "param description lists names");
 	assert((bashTool.promptGuidelines ?? []).some((g) => /secrets/.test(g)), "guideline present");
 	assert(bashTool.name === "bash" && bashTool.label, "stock fields preserved");
+});
+
+test("ptc signature lists the configured profile names", () => {
+	assertMatch(secretsSh.signature, /"jellyfin" \| "forgejo"/, `signature: ${secretsSh.signature}`);
 });
 
 test("bash override: `secrets` injects env and does not leak via details", async () => {

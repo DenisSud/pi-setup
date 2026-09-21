@@ -127,12 +127,32 @@ export default function security(pi: ExtensionAPI) {
 	// ── bash override: one extra optional `secrets` parameter ────────────
 
 	const proto = createBashToolDefinition(process.cwd());
+
+	// Surface the configured profiles in the prompt copy: the model should pick
+	// a profile by name without guessing and reading an error first.
+	let profileSummary = "none configured (add profiles to ~/.pi/agent/security.json)";
+	let profileNames: string[] = [];
+	let ptcProfileType = "profile";
+	try {
+		const cfg = loadConfig();
+		profileNames = Object.keys(cfg.profiles);
+		if (profileNames.length > 0) {
+			profileSummary = profileNames
+				.map((name) => {
+					const description = cfg.profiles[name].description;
+					return description ? `${name} (${description})` : name;
+				})
+				.join("; ");
+			ptcProfileType = profileNames.map((name) => `"${name}"`).join(" | ");
+		}
+	} catch (err) {
+		profileSummary = `unavailable — ${errorText(err)}`;
+	}
 	const bashParameters = Type.Object({
 		...proto.parameters.properties,
 		secrets: Type.Optional(
 			Type.String({
-				description:
-					"Secrets profile name. Injects that profile's credentials as environment variables for this command; reference them as $NAME.",
+				description: `Secrets profile name (available: ${profileNames.length > 0 ? profileNames.join(", ") : "none"}). Injects that profile's credentials as environment variables for this command; reference them as $NAME.`,
 			}),
 		),
 	});
@@ -141,7 +161,9 @@ export default function security(pi: ExtensionAPI) {
 		...proto,
 		description:
 			proto.description +
-			' Pass `secrets: "<profile>"` to run the command with that secrets profile\'s credentials injected as environment variables; use $NAME references inside the command. Secret values in output appear as «redacted:NAME».',
+			' Pass `secrets: "<profile>"` to run the command with that secrets profile\'s credentials injected as environment variables; use $NAME references inside the command. Secret values in output appear as «redacted:NAME». Available profiles: ' +
+			profileSummary +
+			".",
 		promptGuidelines: [
 			...(proto.promptGuidelines ?? []),
 			"Never fetch, echo, or copy credential values. Pass the bash tool's `secrets` parameter with a profile name (ptc programs: `secrets_sh`) and reference names like $FORGEJO_TOKEN in the command; output containing a secret value is replaced with «redacted:NAME».",
@@ -188,8 +210,7 @@ export default function security(pi: ExtensionAPI) {
 			return { output: capped, code: exitCode };
 		},
 		{
-			signature:
-				"{ profile, command, timeout_ms? } → { output, code } — runs the command with the profile's credentials in env; output is redacted",
+			signature: `{ ${ptcProfileType}, command, timeout_ms? } → { output, code } — runs the command with the profile's credentials in env; output is redacted`,
 		},
 	);
 
