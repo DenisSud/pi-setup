@@ -33,7 +33,9 @@ const WRAPPERS = new Set([
 	"dash",
 ]);
 
-/** Case-insensitive substrings that mark a credential store path. */
+/** Case-insensitive substrings that mark a credential store path. The last
+ * two are retired stores (age secrets, the old secrets.md) — kept blocked so
+ * nothing re-reads them out of habit. */
 const PATH_FRAGMENTS = [
 	".config/rbw",
 	"local/share/rbw",
