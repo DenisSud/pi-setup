@@ -12,6 +12,13 @@
  * Registration is idempotent (last write wins): extension factories re-run
  * on /reload, and the module cache may or may not be re-evaluated, so a
  * duplicate must never throw.
+ *
+ * The store lives on `globalThis`, not in module scope: pi loads each
+ * extension with its own module instance, so a module-scoped Map would give
+ * the ptc extension and every registering extension a *different* registry
+ * (observed: `web_search` and `secrets_sh` were registered but undefined in
+ * programs). One process-wide store fixes that; it also keeps /reload
+ * idempotent across module re-evaluation.
  */
 
 export type PtcArgs = Record<string, unknown>;
@@ -24,7 +31,9 @@ export interface PtcRegistration {
 	signature?: string;
 }
 
-const registry = new Map<string, PtcRegistration>();
+const REGISTRY_KEY = Symbol.for("pi-setup.ptc.registry");
+type RegistryHost = typeof globalThis & { [REGISTRY_KEY]?: Map<string, PtcRegistration> };
+const registry: Map<string, PtcRegistration> = ((globalThis as RegistryHost)[REGISTRY_KEY] ??= new Map());
 
 export function registerPtcTool(name: string, run: PtcRun, opts?: { signature?: string }): void {
 	registry.set(name, { name, run, signature: opts?.signature });

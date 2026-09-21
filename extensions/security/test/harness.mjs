@@ -443,6 +443,17 @@ test("before_provider_request: scrubs nested payload in place", async () => {
 	assert(payload.messages[0].content[0].text === `leak ${placeholder("JELLYFIN_API_KEY")}`, "payload scrubbed");
 });
 
+test("ptc registry: separate module instances share one store (pi isolates extensions)", async () => {
+	// pi loads each extension with its own module instance, so a module-scoped
+	// registry would hide registrations from the ptc extension.
+	const url = new URL("../../ptc/registry.ts", import.meta.url);
+	const isolated = await import(`${url.href}?instance=2`);
+	isolated.registerPtcTool("__isolation_probe__", () => "first");
+	assert(getPtcTool("__isolation_probe__")?.run() === "first", "visible through the first instance");
+	isolated.registerPtcTool("__isolation_probe__", () => "second");
+	assert(getPtcTool("__isolation_probe__")?.run() === "second", "last write wins across instances");
+});
+
 test("ptc secrets_sh: injects env, returns redacted output", async () => {
 	const result = await secretsSh.run(
 		{ profile: "forgejo", command: 'printf "%s" "$FORGEJO_TOKEN"' },
