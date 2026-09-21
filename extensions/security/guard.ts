@@ -158,14 +158,16 @@ export function checkToolInput(toolName: string, input: Record<string, unknown>,
 	for (const text of strings) {
 		if (extraMatches(text, settings)) return extraReason();
 	}
+	// bash and ptc execute arbitrary code: check the whole input.
 	if (toolName === "bash") return checkCommand(String(input.command ?? ""), settings);
-	if (toolName === "ptc") {
-		return checkPtcCode(typeof input.code === "string" ? input.code : "", settings);
-	}
+	if (toolName === "ptc") return checkPtcCode(typeof input.code === "string" ? input.code : "", settings);
+	// File tools: only the path can leak store *contents*. Writing text that
+	// merely mentions a store path (docs, configs, this extension's own tests)
+	// is fine, so content/pattern fields are not checked here.
 	if (PATH_TOOLS.has(toolName)) {
-		const lowered = strings.join("\n").toLowerCase();
+		const path = typeof input.path === "string" ? input.path.toLowerCase() : "";
 		for (const fragment of PATH_FRAGMENTS) {
-			if (lowered.includes(fragment)) return pathReason(fragment);
+			if (path.includes(fragment)) return pathReason(fragment);
 		}
 	}
 	return null;
