@@ -23,3 +23,12 @@ Stop at the first rung that holds:
 - A deliberate simplification with a real ceiling gets a marker: `# ponytail: <ceiling>, upgrade when <condition>`.
 - Non-trivial logic (a branch, a loop, a parser, a money/security path) ships with one minimal runnable check; trivial code ships with none.
 - Full rigor stays for: validation at trust boundaries, security, error handling that prevents data loss, and anything explicitly requested — including explicit processes like TDD or a review checklist.
+
+## Secrets
+
+Credentials live in Bitwarden, never in the shell env, files, notes, or replies.
+Use the bash tool's `secrets` parameter or ptc's `secrets_sh`; the available
+profiles are listed in the bash tool description. Values in output are redacted
+to `«redacted:NAME»`, and direct store reads (`rbw`, keyrings, `auth.json`) are
+blocked. When a new service credential is needed, ask Denis to add it to the
+vault rather than putting it in a file.
