@@ -25,6 +25,7 @@
  *   - sh timeout + cap           → timed_out flag, truncated flag
  *   - output cap                 → head+tail cap + full output file written
  *   - web_search registration    → present in registry via the web-search extension (no network)
+ *   - web_fetch fan-out          → program fetches URLs in parallel, stubbed fetch, no network
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -135,7 +136,7 @@ test("registry: list/get/idempotent re-register", async () => {
 test("session_start: description lists every registered tool", async () => {
 	const { ptc } = await setup();
 	const desc = ptc.description;
-	for (const name of ["read", "grep", "find", "web_search"]) {
+	for (const name of ["read", "grep", "find", "web_search", "web_fetch"]) {
 		assert(desc.includes(name), `description mentions ${name}`);
 	}
 	assert(desc.includes("console.log"), "description states output convention");
@@ -378,6 +379,29 @@ test("web_search ptc binding: registered with signature, runs without network on
 	assert(ptc.description.includes("results: {title,url,content}[]"), "signature rendered into description");
 	// No live call: auth is environment-dependent; the fan-out behavior of the
 	// runner is already covered by the read/grep/find tests above.
+});
+
+test("web_fetch ptc binding: program fans out over URLs", async () => {
+	const { ptc } = await setup();
+	assert(getPtcTool("web_fetch"), "web_fetch in registry");
+	const realFetch = globalThis.fetch;
+	// Plain text keeps the test off trafilatura/pandoc; routing is what's under test.
+	globalThis.fetch = async (url) =>
+		new Response(`BODY ${url}`, { status: 200, headers: { "content-type": "text/plain" } });
+	try {
+		const res = await runTool(
+			ptc,
+			`const urls = ["https://example.com/a", "https://example.com/b"];
+const pages = await Promise.all(urls.map((url) => web_fetch({ url })));
+for (const p of pages) print(p.url + " | " + p.content);`,
+		);
+		const text = outputText(res);
+		assert(!res.isError, `not an error: ${text}`);
+		assert(text.includes("https://example.com/a | BODY https://example.com/a"), `first page: ${text}`);
+		assert(text.includes("https://example.com/b | BODY https://example.com/b"), `second page: ${text}`);
+	} finally {
+		globalThis.fetch = realFetch;
+	}
 });
 
 // ── fixture setup / run ───────────────────────────────────────────────────

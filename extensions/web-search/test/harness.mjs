@@ -147,13 +147,16 @@ createExtension(pi);
 const search = pi.tools.get("web_search");
 const fetchTool = pi.tools.get("web_fetch");
 
-test("registers web_search, web_fetch, and the ptc binding", () => {
+test("registers web_search, web_fetch, and the ptc bindings", () => {
 	assert(search, "web_search tool registered");
 	assert(fetchTool, "web_fetch tool registered");
 	assert(
 		listPtcTools().some((t) => t.name === "web_search"),
 		"web_search registered for ptc",
 	);
+	const fetchBinding = listPtcTools().find((t) => t.name === "web_fetch");
+	assert(fetchBinding, "web_fetch registered for ptc");
+	assert(fetchBinding.signature.includes("{ url }"), "fetch binding signature documented");
 });
 
 // ── web_search ────────────────────────────────────────────────────────────

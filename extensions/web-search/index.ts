@@ -21,8 +21,9 @@
  * static HTML (often empty). Add a Playwright/Chromium DOM fallback when
  * JS-rendered pages start to matter; do not start with screenshots.
  *
- * ptc: `web_search` is registered for programmatic calling (extensions/ptc) —
- * search fan-out is the benchmark-proven fit for running tool calls in code.
+ * ptc: `web_search` and `web_fetch` are registered for programmatic calling
+ * (extensions/ptc). Each fetch returns up to 120k chars, so a program fanning
+ * out over many URLs must slice inside the program — the whole point of ptc.
  */
 
 import { spawn } from "node:child_process";
@@ -440,6 +441,17 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			};
 		},
 		{ signature: "{ query, max_results?, time_range? } → { query, results: {title,url,content}[], unresponsive_engines: [string,string][] }" },
+	);
+
+	// ptc binding: structured fetch results for URL fan-out inside programs.
+	registerPtcTool(
+		"web_fetch",
+		async (args) => {
+			const url = String(args.url ?? "");
+			if (!url) throw new Error("web_fetch: url is required");
+			return fetchAndExtract(url, undefined);
+		},
+		{ signature: "{ url } → { url, title, content, method, truncated }" },
 	);
 
 	pi.registerTool({
