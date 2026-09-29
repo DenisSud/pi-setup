@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# pi-bots-web — web bridge for the bots.
+#
+# Serves the bot list and relays browser WebSockets to the bots' unix sockets.
+# See packages/connector/README.md (S4) for the shape.
+set -eu
+
+self="$(readlink -f "$0")"
+root="$(dirname "$(dirname "$self")")"
+exec node "$root/packages/connector/src/web-cli.ts" "$@"

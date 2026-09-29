@@ -1,0 +1,414 @@
+/**
+ * Harness tests for the ptc extension.
+ *
+ * Drives the registered `ptc` tool directly with a stubbed ExtensionAPI,
+ * exactly like the consult harness. Real child-process execution, real
+ * registry, real built-ins (read/grep/find against temp files) — no network,
+ * no model.
+ *
+ * Tests:
+ *   - registry basics            → list/get, idempotent re-register
+ *   - registration timing        → description built at session_start lists all tools
+ *   - fan-out + Promise.all      → parallel read of two files, aggregated in code
+ *   - grep structured + filter   → matches filtered/counted inside the program
+ *   - find                       → regex path matching, type filter
+ *   - unknown tool               → clean error naming the tool
+ *   - tool error propagation     → read ENOENT rejects inside the program
+ *   - program error              → isError with the stack, output preserved
+ *   - timeout                    → PTC_TIMEOUT_MS honored, isError
+ *   - static import              → user module imports work (separate module)
+ *   - syntax error diagnostics   → references user-program.mjs, file kept
+ *   - program file lifecycle     → saved+reported every run, kept (never deleted)
+ *   - rerun by path              → file/dir forms, cwd stable, edits picked up
+ *   - param validation           → both/neither/bad path are clean errors
+ *   - sh                         → stdout/stderr/code, nonzero exit no-throw
+ *   - sh timeout + cap           → timed_out flag, truncated flag
+ *   - output cap                 → head+tail cap + full output file written
+ *   - web_search registration    → present in registry via the web-search extension (no network)
+ *   - web_fetch fan-out          → program fetches URLs in parallel, stubbed fetch, no network
+ *
+ * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
+ * Requires node_modules symlinks set up by run.sh.
+ */
+
+import { mkdtemp, readFile, rm, writeFile, mkdir, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import createPtc from "../index.ts";
+import { listPtcTools, getPtcTool, registerPtcTool } from "../registry.ts";
+import createWebSearch from "../../web-search/index.ts";
+
+// ── tiny test runner ──────────────────────────────────────────────────────
+
+const tests = [];
+let passed = 0;
+let failed = 0;
+
+function test(name, fn) {
+	tests.push({ name, fn });
+}
+
+async function runTests() {
+	for (const t of tests) {
+		try {
+			await t.fn();
+			passed++;
+			console.log(`  ok    ${t.name}`);
+		} catch (err) {
+			failed++;
+			console.error(`  FAIL  ${t.name}`);
+			console.error(`        ${String(err.message).split("\n").slice(0, 8).join("\n        ")}`);
+		}
+	}
+	console.log(`\n${passed}/${tests.length} passed, ${failed} failed`);
+	process.exit(failed ? 1 : 0);
+}
+
+function assert(cond, msg) {
+	if (!cond) throw new Error(msg || "assertion failed");
+}
+
+// ── stub ExtensionAPI (mirrors consult harness) ───────────────────────────
+
+function stubPi() {
+	const tools = new Map();
+	const handlers = {};
+	return {
+		registerTool(def) {
+			tools.set(def.name, def);
+		},
+		registerProvider() {},
+		on(event, fn) {
+			handlers[event] = fn;
+		},
+		tools,
+		handlers,
+	};
+}
+
+/** Load ptc + web-search into one stub pi, fire session_start, return the ptc tool. */
+async function setup() {
+	const pi = stubPi();
+	createWebSearch(pi); // registers web_search/web_fetch direct tools + ptc binding
+	createPtc(pi);
+	await pi.handlers.session_start({}, {});
+	const ptc = pi.tools.get("ptc");
+	assert(ptc, "ptc tool registered at session_start");
+	return { pi, ptc };
+}
+
+/** Execute a program and return the tool result object. */
+/** Program output = result text up to the appended "Program file:" line. */
+function outputText(res) {
+	return res.content[0].text.split("\n\nProgram file:")[0];
+}
+
+function runTool(ptc, code, signal) {
+	return runToolParams(ptc, { code }, signal);
+}
+
+/** Execute with full params (code/path) and return the tool result object. */
+async function runToolParams(ptc, params, signal) {
+	let result;
+	try {
+		result = await ptc.execute("test-call-id", params, signal, undefined, { modelRegistry: {} });
+	} catch (err) {
+		// pi's contract: execute errors are signaled by throwing, and pi wraps
+		// the thrown message into this result shape (isError: true, no details).
+		return { content: [{ type: "text", text: err instanceof Error ? err.message : String(err) }], details: {}, isError: true };
+	}
+	if ("isError" in result) throw new Error("execute returned `isError` — pi ignores that field; throw instead");
+	return result;
+}
+
+let dir;
+
+// ── tests ─────────────────────────────────────────────────────────────────
+
+test("registry: list/get/idempotent re-register", async () => {
+	const before = listPtcTools().length;
+	registerPtcTool("__probe", () => 1);
+	assert(getPtcTool("__probe"), "probe registered");
+	registerPtcTool("__probe", () => 2); // must not throw (reload safety)
+	assert(listPtcTools().length === before + 1, "idempotent: no duplicate entry");
+});
+
+test("session_start: description lists every registered tool", async () => {
+	const { ptc } = await setup();
+	const desc = ptc.description;
+	for (const name of ["read", "grep", "find", "web_search", "web_fetch"]) {
+		assert(desc.includes(name), `description mentions ${name}`);
+	}
+	assert(desc.includes("console.log"), "description states output convention");
+	assert(desc.includes("general-purpose"), "description positions ptc as general-purpose JS");
+	assert(
+		ptc.promptGuidelines.some((g) => g.includes("direct tool calls")),
+		"guidelines state when to prefer direct tool calls",
+	);
+});
+
+test("fan-out: Promise.all reads two files, program aggregates", async () => {
+	const { ptc } = await setup();
+	const a = join(dir, "a.txt");
+	const b = join(dir, "b.txt");
+	await writeFile(a, "alpha\nbeta\n");
+	await writeFile(b, "gamma\ndelta\n");
+	const res = await runTool(
+		ptc,
+		`const [x, y] = await Promise.all([read({ path: ${JSON.stringify(a)} }), read({ path: ${JSON.stringify(b)} })]);
+print(JSON.stringify({ lens: [x.content.length, y.content.length], trunc: x.truncated || y.truncated, lines: x.total_lines + y.total_lines }));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const parsed = JSON.parse(outputText(res));
+	assert(parsed.lens.join(",") === "11,12", `lengths 11,12 — got ${parsed.lens}`);
+	assert(parsed.lines === 4, `4 total lines — got ${parsed.lines}`);
+});
+
+test("grep: structured matches, filtered in code", async () => {
+	const { ptc } = await setup();
+	await writeFile(join(dir, "log1.txt"), "INFO ok\nERROR bad1\nINFO fine\nERROR bad2\n");
+	await writeFile(join(dir, "log2.txt"), "ERROR bad3\n");
+	const res = await runTool(
+		ptc,
+		`const g = await grep({ pattern: "ERROR", path: ${JSON.stringify(dir)} });
+print(JSON.stringify({ total: g.total_matches, errors: g.matches.map(m => m.text.split(" ")[1]) }));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const parsed = JSON.parse(outputText(res));
+	assert(parsed.total === 3, `3 matches — got ${parsed.total}`);
+	assert(JSON.stringify(parsed.errors) === JSON.stringify(["bad1", "bad2", "bad3"]), `texts — got ${JSON.stringify(parsed.errors)}`);
+});
+
+test("find: regex on relative paths, type filter", async () => {
+	const { ptc } = await setup();
+	await mkdir(join(dir, "sub"), { recursive: true });
+	await writeFile(join(dir, "sub", "x.py"), "print(1)\n");
+	await writeFile(join(dir, "x.py"), "print(2)\n");
+	const res = await runTool(
+		ptc,
+		`const f = await find({ pattern: String.raw\`\.py$\`, path: ${JSON.stringify(dir)} });
+const d = await find({ pattern: "sub", path: ${JSON.stringify(dir)}, type: "dir" });
+print(JSON.stringify({ files: f.paths.sort(), dirs: d.paths }));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const parsed = JSON.parse(outputText(res));
+	assert(JSON.stringify(parsed.files) === JSON.stringify(["sub/x.py", "x.py"]), `files — got ${JSON.stringify(parsed.files)}`);
+	assert(JSON.stringify(parsed.dirs) === JSON.stringify(["sub"]), `dirs — got ${JSON.stringify(parsed.dirs)}`);
+});
+
+test("unknown tool: clean error naming the tool", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(ptc, `await definitely_not_registered({});`);
+	assert(res.isError, "isError");
+	assert(res.content[0].text.includes("definitely_not_registered"), `names the tool — got ${res.content[0].text}`);
+});
+
+test("tool error propagation: read ENOENT rejects inside the program", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(
+		ptc,
+		`try { await read({ path: "/nonexistent/ptc-test-file" }); print("no error"); }
+catch (e) { print("caught: " + e.message.slice(0, 30)); }`,
+	);
+	assert(!res.isError, `program handled it — got ${res.content[0].text}`);
+	assert(res.content[0].text.includes("caught: read: no such file"), `error text — got ${res.content[0].text}`);
+	assert(!outputText(res).includes("Program file:"), "appended saved-program line is not part of the program output");
+});
+
+test("program error: isError with stack in the message", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(ptc, `print("before"); throw new Error("boom");`);
+	assert(res.isError, "isError");
+	assert(res.content[0].text.includes("before"), "stdout preserved before the error");
+	assert(res.content[0].text.includes("boom"), "error message present");
+});
+
+test("timeout: PTC_TIMEOUT_MS honored", async () => {
+	const { ptc } = await setup();
+	process.env.PTC_TIMEOUT_MS = "300";
+	try {
+		const res = await runTool(ptc, `await new Promise(() => {});`);
+		assert(res.isError, "isError");
+		assert(res.content[0].text.includes("timed out"), `timeout message — got ${res.content[0].text}`);
+	} finally {
+		delete process.env.PTC_TIMEOUT_MS;
+	}
+});
+
+test("static import: user module imports work, line numbers are user's own", async () => {
+	const { ptc } = await setup();
+	const f = join(dir, "imp.txt");
+	await writeFile(f, "hello import\n");
+	const res = await runTool(
+		ptc,
+		`import { readFileSync } from "node:fs";
+print(readFileSync(${JSON.stringify(f)}, "utf8").trim());`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	assert(outputText(res).trim() === "hello import", `output — got ${res.content[0].text}`);
+});
+
+test("syntax error: precise diagnostic, failing line echoed, file kept", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(ptc, `import { broken from "node:fs";
+print("never");`);
+	assert(res.isError, "isError");
+	const text = res.content[0].text;
+	assert(text.includes("user-program.mjs"), `references user file — got ${text.slice(0, 300)}`);
+	assert(text.includes("broken"), `failing line echoed — got ${text.slice(0, 300)}`);
+	assert(text.includes("syntax error"), `names the failure — got ${text.slice(0, 300)}`);
+	const m = text.match(/\(program at (\S+)\)/);
+	assert(m, `program path reported — got ${text.slice(-300)}`);
+	assert((await stat(m[1]).catch(() => null))?.isFile(), "kept program file exists");
+	const kept = await readFile(m[1], "utf8");
+	assert(kept.includes("broken"), "user program preserved");
+	await rm(m[1], { force: true });
+});
+
+test("program file: saved+reported on every run, kept on success", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(ptc, `print("ok");`);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const p = res.details.programPath;
+	assert(typeof p === "string" && p.endsWith("user-program.mjs"), `programPath reported — got ${JSON.stringify(res.details)}`);
+	assert((await stat(p).catch(() => null))?.isFile(), "program file kept on success");
+	assert(res.content[0].text.includes(p), "result text shows the program path");
+	assert(res.content[0].text.includes("rerun"), "result text hints the rerun flow");
+});
+
+test("rerun by path: file and dir forms, same output and cwd", async () => {
+	const { ptc } = await setup();
+	const first = await runTool(ptc, `print("cwd:" + process.cwd());`);
+	assert(!first.isError, `no error: ${first.content[0].text}`);
+	const firstOut = first.content[0].text.split("\n")[0];
+	const p = first.details.programPath;
+	const progDir = dirname(p);
+	assert(firstOut === `cwd:${progDir}`, `cwd is the program dir — got ${firstOut}, want ${progDir}`);
+	for (const path of [p, progDir]) {
+		const res = await runToolParams(ptc, { path });
+		assert(!res.isError, `no error for ${path}: ${res.content[0].text}`);
+		assert(res.content[0].text.split("\n")[0] === firstOut, `same output+cwd via ${path} — got ${res.content[0].text}`);
+		assert(res.details.programPath === p, "same program file reported");
+	}
+});
+
+test("rerun by path: re-reads the file, picks up edits", async () => {
+	const { ptc } = await setup();
+	const first = await runTool(ptc, `print("v1");`);
+	assert(!first.isError, `no error: ${first.content[0].text}`);
+	const p = first.details.programPath;
+	await writeFile(p, `print("v2");`);
+	const res = await runToolParams(ptc, { path: p });
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	assert(res.content[0].text.startsWith("v2"), `edited output — got ${res.content[0].text}`);
+	await rm(p, { force: true });
+});
+
+test("param validation: both/neither/bad path are clean errors", async () => {
+	const { ptc } = await setup();
+	const both = await runToolParams(ptc, { code: `print(1);`, path: "/tmp" });
+	assert(both.isError && both.content[0].text.includes("not both"), `both — got ${both.content[0].text}`);
+	const neither = await runToolParams(ptc, {});
+	assert(neither.isError && neither.content[0].text.includes("provide `code`"), `neither — got ${neither.content[0].text}`);
+	const missing = await runToolParams(ptc, { path: "/tmp/ptc-no-such-dir-xyz" });
+	assert(missing.isError && missing.content[0].text.includes("no program at"), `missing — got ${missing.content[0].text}`);
+	const noProgram = await runToolParams(ptc, { path: dir }); // fixture dir, no user-program.mjs inside
+	assert(noProgram.isError && noProgram.content[0].text.includes("no program file"), `noProgram — got ${noProgram.content[0].text}`);
+});
+
+test("sh: captures streams, nonzero exit is data not error", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(
+		ptc,
+		`const r = await sh({ command: "echo out; echo err >&2; exit 3" });
+print(JSON.stringify(r));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const r = JSON.parse(outputText(res));
+	assert(r.stdout === "out\n", `stdout — got ${JSON.stringify(r.stdout)}`);
+	assert(r.stderr === "err\n", `stderr — got ${JSON.stringify(r.stderr)}`);
+	assert(r.code === 3, `code — got ${r.code}`);
+	assert(!r.timed_out && !r.truncated, "clean run flags");
+});
+
+test("sh: timeout kills the command and reports", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(
+		ptc,
+		`const r = await sh({ command: "sleep 30", timeout_ms: 300 });
+print(JSON.stringify(r));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const r = JSON.parse(outputText(res));
+	assert(r.timed_out === true, `timed_out — got ${JSON.stringify(r)}`);
+	assert(r.signal === "SIGKILL", `signal — got ${JSON.stringify(r)}`);
+});
+
+test("sh: output cap flags truncation", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(
+		ptc,
+		`const r = await sh({ command: "head -c 5000 /dev/zero | tr \\"\\\\0\\" x", max_output: 100 });
+print(JSON.stringify(r));`,
+	);
+	assert(!res.isError, `no error: ${res.content[0].text}`);
+	const r = JSON.parse(outputText(res));
+	assert(r.stdout.length === 100, `capped stdout — got ${r.stdout.length}`);
+	assert(r.truncated === true, "truncated flag");
+});
+
+test("output cap: head+tail with full output file", async () => {
+	const { ptc } = await setup();
+	const res = await runTool(ptc, `print("x".repeat(100000)); print("THE_TAIL_MARKER");`);
+	assert(!res.isError, `no error: ${res.content[0].text.slice(0, 200)}`);
+	const text = res.content[0].text;
+	assert(text.includes("chars dropped"), "cap marker present");
+	assert(text.includes("THE_TAIL_MARKER"), "tail preserved");
+	const path = res.details.fullOutputPath;
+	assert(path, "full output path reported");
+	const full = await readFile(path, "utf8");
+	assert(full.length === 100000 + 1 + "THE_TAIL_MARKER".length, `full output intact (${full.length})`);
+	await rm(path, { force: true });
+});
+
+test("web_search ptc binding: registered with signature, runs without network only in shape", async () => {
+	const { ptc } = await setup();
+	const reg = getPtcTool("web_search");
+	assert(reg, "web_search in registry");
+	assert(reg.signature.includes("{ query, max_results?, time_range? }"), "signature documented");
+	assert(ptc.description.includes("results: {title,url,content}[]"), "signature rendered into description");
+	// No live call: auth is environment-dependent; the fan-out behavior of the
+	// runner is already covered by the read/grep/find tests above.
+});
+
+test("web_fetch ptc binding: program fans out over URLs", async () => {
+	const { ptc } = await setup();
+	assert(getPtcTool("web_fetch"), "web_fetch in registry");
+	const realFetch = globalThis.fetch;
+	// Plain text keeps the test off trafilatura/pandoc; routing is what's under test.
+	globalThis.fetch = async (url) =>
+		new Response(`BODY ${url}`, { status: 200, headers: { "content-type": "text/plain" } });
+	try {
+		const res = await runTool(
+			ptc,
+			`const urls = ["https://example.com/a", "https://example.com/b"];
+const pages = await Promise.all(urls.map((url) => web_fetch({ url })));
+for (const p of pages) print(p.url + " | " + p.content);`,
+		);
+		const text = outputText(res);
+		assert(!res.isError, `not an error: ${text}`);
+		assert(text.includes("https://example.com/a | BODY https://example.com/a"), `first page: ${text}`);
+		assert(text.includes("https://example.com/b | BODY https://example.com/b"), `second page: ${text}`);
+	} finally {
+		globalThis.fetch = realFetch;
+	}
+});
+
+// ── fixture setup / run ───────────────────────────────────────────────────
+
+dir = await mkdtemp(join(tmpdir(), "ptc-test-"));
+try {
+	await runTests();
+} finally {
+	await rm(dir, { recursive: true, force: true });
+}

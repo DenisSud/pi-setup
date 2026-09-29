@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bots — design plan</title>
+<link rel="icon" href="data:,">
+<style>
+/* ============================================================
+   DESIGN TOKENS — shared principle: the same tokens this page
+   uses are the ones style.css adopts. Change here, port there.
+   ============================================================ */
+:root {
+  color-scheme: light dark;
+  /* surfaces (light) */
+  --bg: #ffffff;
+  --surface: #f7f7f8;
+  --surface-2: #ececee;
+  --elevated: #ffffff;
+  --bubble: #f0f0f2;
+  --border: #e8e8eb;
+  /* text (light) */
+  --text: #1c1c1e;
+  --muted: #6f7076;
+  --faint: #9a9ba0;
+  /* brand — the only interactive color. Light value is the dark
+     navy as-is; it carries enough contrast on white. */
+  --accent: #293352;
+  --accent-hover: #3d4a70;
+  --accent-on: #ffffff;
+  --accent-soft: #eceef4;
+  /* semantic states — never interactive */
+  --ok: #22885e;
+  --ok-bg: #eef8f3;
+  --error: #d33a3f;
+  --error-bg: #fdf1f1;
+  --warn: #b06e15;
+  --warn-bg: #faf4ea;
+  /* shape */
+  --r-chip: 6px;
+  --r-panel: 12px;
+  --r-bubble: 16px;
+  --r-pill: 999px;
+  /* motion — one easing, two durations */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur-in: 220ms;
+  --dur-out: 160ms;
+  /* type ramp (px) */
+  --t-11: 11px;
+  --t-12: 12px;
+  --t-13: 13px;
+  --t-15: 15px;
+  --t-17: 17px;
+  --t-20: 20px;
+  --t-28: 28px;
+  /* fonts */
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+[data-mode="dark"] {
+  color-scheme: dark;
+  /* layers: base recedes, elevated advances (HIG dark-mode rule) */
+  --bg: #131519;
+  --surface: #1a1d22;
+  --surface-2: #24272d;
+  --elevated: #1f232a;
+  --bubble: #262a31;
+  --border: #2c3037;
+  --text: #edeef0;
+  --muted: #9a9da5;
+  --faint: #6c6f76;
+  /* brand lifts: same hue, raised lightness, keeps ≥7:1 on --bg */
+  --accent: #8fa8e0;
+  --accent-hover: #a3b8e8;
+  --accent-on: #10131c;
+  --accent-soft: #232a3d;
+  --ok: #4fc489;
+  --ok-bg: #17251f;
+  --error: #ff6b6e;
+  --error-bg: #2a1a1c;
+  --warn: #e0a352;
+  --warn-bg: #29221a;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-mode="light"]) {
+    color-scheme: dark;
+    --bg: #131519;
+    --surface: #1a1d22;
+    --surface-2: #24272d;
+    --elevated: #1f232a;
+    --bubble: #262a31;
+    --border: #2c3037;
+    --text: #edeef0;
+    --muted: #9a9da5;
+    --faint: #6c6f76;
+    --accent: #8fa8e0;
+    --accent-hover: #a3b8e8;
+    --accent-on: #10131c;
+    --accent-soft: #232a3d;
+    --ok: #4fc489;
+    --ok-bg: #17251f;
+    --error: #ff6b6e;
+    --error-bg: #2a1a1c;
+    --warn: #e0a352;
+    --warn-bg: #29221a;
+  }
+}
+
+/* ============================================================ base */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 var(--t-15)/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.page { max-width: 880px; margin: 0 auto; padding: 40px 20px 120px; }
+header.masthead { padding: 48px 0 24px; border-bottom: 1px solid var(--border); }
+.masthead h1 { font-size: var(--t-28); font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+.masthead p { color: var(--muted); margin: 0; font-size: var(--t-13); }
+
+/* theme toggle (demo page only — the app follows the system) */
+.mode-toggle {
+  display: inline-flex; gap: 2px; padding: 2px;
+  border: 1px solid var(--border); border-radius: var(--r-panel);
+  background: var(--surface); margin-top: 16px; float: right;
+}
+.mode-toggle button {
+  border: none; background: none; color: var(--muted);
+  font: 500 var(--t-12)/1 var(--sans); padding: 7px 12px; border-radius: 9px; cursor: pointer;
+}
+.mode-toggle button.active { background: var(--accent); color: var(--accent-on); }
+
+nav.toc {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+  font-size: var(--t-13); position: sticky; top: 0; background: var(--bg); z-index: 5;
+}
+nav.toc a { color: var(--muted); text-decoration: none; }
+nav.toc a:hover { color: var(--accent); }
+
+section { margin: 56px 0 0; }
+section > h2 {
+  font-size: var(--t-20); font-weight: 700; letter-spacing: -0.01em;
+  margin: 0 0 4px; scroll-margin-top: 64px;
+}
+section > .why { color: var(--muted); font-size: var(--t-13); margin: 0 0 20px; max-width: 640px; }
+.sec-tag {
+  display: inline-block; font-size: var(--t-11); font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px;
+}
+
+/* demo frames */
+.demo {
+  border: 1px solid var(--border); border-radius: var(--r-panel);
+  background: var(--elevated); padding: 20px; margin: 12px 0;
+}
+.demo-label { font-size: var(--t-11); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin: 0 0 12px; }
+.demo-note { color: var(--muted); font-size: var(--t-12); margin: 10px 0 0; }
+
+/* ============================================================ 1. principles */
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.principle { border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); padding: 16px; }
+.principle h3 { font-size: var(--t-15); font-weight: 600; margin: 0 0 6px; }
+.principle p { font-size: var(--t-13); color: var(--muted); margin: 0; line-height: 1.55; }
+
+/* ============================================================ 2. color */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.swatch { border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; background: var(--elevated); }
+.swatch .chip { height: 56px; }
+.swatch .meta { padding: 10px 12px; }
+.swatch .role { font-size: var(--t-13); font-weight: 600; }
+.swatch .vals { font-size: var(--t-11); color: var(--faint); font-family: var(--mono); margin-top: 3px; }
+.swatch .use { font-size: var(--t-12); color: var(--muted); margin-top: 6px; line-height: 1.45; }
+
+.rules { border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 var(--r-panel) var(--r-panel) 0; padding: 14px 16px; font-size: var(--t-13); color: var(--muted); }
+.rules b { color: var(--text); }
+.rules ul { margin: 6px 0 0; padding-left: 18px; }
+.rules li { margin: 4px 0; }
+
+/* live status pills (feedback section of the app) */
+.status-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--t-12); font-weight: 500; padding: 4px 12px; border-radius: var(--r-pill);
+}
+.status-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.status-pill.idle { background: var(--surface-2); color: var(--muted); }
+.status-pill.idle .dot { background: var(--faint); }
+.status-pill.busy { background: var(--accent-soft); color: var(--accent); }
+.status-pill.busy .dot { background: var(--accent); animation: breathe 2s var(--ease) infinite; }
+.status-pill.ok { background: var(--ok-bg); color: var(--ok); }
+.status-pill.ok .dot { background: var(--ok); }
+.status-pill.warn { background: var(--warn-bg); color: var(--warn); }
+.status-pill.warn .dot { background: var(--warn); }
+.status-pill.error { background: var(--error-bg); color: var(--error); }
+.status-pill.error .dot { background: var(--error); }
+@keyframes breathe { 50% { opacity: 0.35; } }
+
+/* ============================================================ 3. type */
+.ramp { border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; }
+.ramp-row { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); align-items: baseline; }
+.ramp-row:last-child { border-bottom: none; }
+.ramp-row:nth-child(even) { background: var(--surface); }
+.ramp-spec { font-family: var(--mono); font-size: var(--t-11); color: var(--faint); }
+.ramp-spec b { display: block; color: var(--muted); font-family: var(--sans); font-weight: 600; font-size: var(--t-13); margin-bottom: 2px; }
+.ramp-sample { color: var(--text); }
+
+/* ============================================================ 4. shape & spacing */
+.radius-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.radius-box { width: 108px; text-align: center; }
+.radius-box .box { height: 72px; background: var(--accent-soft); border: 1px solid var(--accent); }
+.radius-box .lab { font-family: var(--mono); font-size: var(--t-11); color: var(--muted); margin-top: 6px; }
+.space-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-family: var(--mono); font-size: var(--t-11); color: var(--muted); }
+.space-row .bar { height: 12px; background: var(--accent-soft); border-radius: 3px; }
+
+/* ============================================================ 5. icons */
+.icon-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: var(--r-panel); border: 1px solid var(--border);
+  background: var(--elevated); color: var(--text); cursor: pointer; transition: background var(--dur-out) var(--ease);
+}
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.filled { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.icon-btn.filled:hover { background: var(--accent-hover); }
+
+/* action pills */
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--elevated); color: var(--text);
+  font: 500 var(--t-13)/1 var(--sans); padding: 9px 15px; border-radius: var(--r-pill);
+  cursor: pointer; transition: background var(--dur-out) var(--ease);
+}
+.pill-btn:hover { background: var(--surface-2); }
+.pill-btn.danger { color: var(--error); border-color: var(--error); background: var(--error-bg); }
+.pill-btn svg { width: 14px; height: 14px; }
+
+/* ============================================================ 6. motion */
+.curve-demo { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.track { flex: 1; min-width: 220px; }
+.track .lane { position: relative; height: 34px; background: var(--surface); border-radius: var(--r-chip); overflow: hidden; }
+.track .knob { position: absolute; top: 5px; left: 5px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); }
+.track.play .knob { animation: travel var(--dur-in) var(--ease) forwards; }
+@keyframes travel { to { left: calc(100% - 29px); } }
+.curve-note { font-family: var(--mono); font-size: var(--t-11); color: var(--faint); }
+
+.replay-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.box-enter { width: 140px; height: 64px; border-radius: var(--r-panel); background: var(--accent-soft); border: 1px solid var(--accent); display: grid; place-items: center; font-size: var(--t-12); color: var(--accent); visibility: hidden; }
+.box-enter.show { visibility: visible; animation: enter var(--dur-in) var(--ease); }
+@keyframes enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* details demo */
+.fold { border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface); margin: 8px 0; overflow: hidden; }
+.fold > summary { list-style: none; cursor: pointer; padding: 11px 14px; font-size: var(--t-13); font-weight: 500; display: flex; gap: 8px; align-items: baseline; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary .chev { color: var(--faint); transition: transform var(--dur-out) var(--ease); font-size: var(--t-11); }
+.fold[open] > summary .chev { transform: rotate(90deg); }
+.fold .fold-body { padding: 0 14px 12px; font-size: var(--t-12); color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; font-family: var(--mono); }
+
+/* stream-follow live demo */
+.stream-demo { border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden; position: relative; }
+
+/* word-level reveal — each streamed token chunk fades in on arrival.
+   The fade (150ms) is shorter than the median inter-token interval, so
+   the reveal rate follows tps automatically: chunk arrives → fades in. */
+.w-fade { opacity: 0; animation: wordIn 150ms var(--ease) both; }
+@keyframes wordIn { from { opacity: 0; filter: blur(1.5px); } to { opacity: 1; filter: none; } }
+
+/* live work window — DeepSeek-style: fixed ~3-line window with fade
+   masks; the growing text translates smoothly through it while the
+   model works; collapses to a summary row when the turn settles. */
+.live-window {
+  height: 62px; overflow: hidden; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  mask-image: linear-gradient(180deg, transparent 0, #000 30%, #000 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 30%, #000 70%, transparent 100%);
+  transition: height var(--dur-in) var(--ease);
+}
+.live-line { margin: 0; padding: 12px 16px 60px; font-size: var(--t-13); line-height: 1.55; color: var(--muted); }
+.live-summary { display: flex; align-items: center; gap: 6px; padding: 11px 16px; font-size: var(--t-13); color: var(--muted); cursor: pointer; user-select: none; }
+.live-summary[hidden] { display: none; }
+.live-summary .chev { color: var(--faint); font-size: var(--t-11); transition: transform var(--dur-out) var(--ease); }
+.live-window.open { height: 200px; mask-image: none; -webkit-mask-image: none; }
+.live-window.open + .live-summary-line { display: none; }
+
+/* jump-to-bottom floating pill: spinner while the model runs, plain
+   ↓ latest when idle. Appears only when the reader is above the end. */
+.jump {
+  position: absolute; bottom: 64px; right: 14px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--elevated); border: 1px solid var(--border); border-radius: var(--r-pill);
+  padding: 7px 14px; font: 500 var(--t-12)/1 var(--sans); color: var(--text);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.10); cursor: pointer;
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity var(--dur-out) var(--ease), transform var(--dur-out) var(--ease);
+}
+.jump.show { opacity: 1; transform: none; pointer-events: auto; }
+.spin { width: 10px; height: 10px; flex: none; border: 1.5px solid var(--surface-2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.stream-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.stream-head .st { font-size: var(--t-13); font-weight: 600; flex: 1; }
+.stream-head .status-pill { transform: none; }
+#streamScroll { height: 240px; overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+#streamScroll .smsg { font-size: var(--t-15); line-height: 1.55; }
+/* tool rows — collapsed by default, status dot carries the state:
+   green landed, red failed, spinner still running. Call text is
+   truncated to a comfortable max; unfolding shows call + result. */
+.tool-row { margin: 4px 0; }
+.tool-row > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; font: var(--t-12)/1.7 var(--mono); overflow: hidden; }
+.tool-row > summary::-webkit-details-marker { display: none; }
+.tdot { flex: none; width: 8px; height: 8px; border-radius: 50%; align-self: center; }
+.tdot.ok { background: var(--ok); }
+.tdot.err { background: var(--error); }
+.tdot.wait { background: transparent; border: 1.5px solid var(--surface-2); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+.tool-row .tn { color: var(--muted); flex: none; }
+.tool-row .tn::after { content: ":"; color: var(--faint); }
+.tool-row .tx { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tool-row[open] .tx { white-space: pre-wrap; overflow: visible; }
+.tr-body { margin: 4px 0 6px; }
+.tr-cmd { font: var(--t-12)/1.5 var(--mono); color: var(--muted); padding: 0 0 4px 16px; }
+.tr-out { font: var(--t-12)/1.5 var(--mono); color: var(--ok); background: var(--ok-bg); border-radius: 10px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-row.failed .tr-out, .tr-out.err { color: var(--error); background: var(--error-bg); }
+#streamScroll .tool-out { font: var(--t-12)/1.5 var(--mono); color: var(--ok); background: var(--ok-bg); border-radius: 10px; padding: 8px 10px; margin: 4px 0; }
+
+/* reasoning row — quieter than a tool row: dimmed, no status dot */
+.reason-row { margin: 3px 0; }
+.reason-row > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 7px; font-size: var(--t-13); color: var(--faint); font-style: italic; }
+.reason-row > summary::-webkit-details-marker { display: none; }
+.reason-row .chev { flex: none; font-size: var(--t-11); color: var(--faint); transition: transform var(--dur-out) var(--ease); }
+.reason-row[open] .chev { transform: rotate(90deg); }
+.reason-row .rbody { margin: 4px 0 6px; padding: 8px 12px; border-left: 2px solid var(--border); font-size: var(--t-13); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.jitter-note { font-size: var(--t-12); color: var(--muted); padding: 10px 14px; border-top: 1px solid var(--border); background: var(--surface); }
+.jitter-note code { font-family: var(--mono); background: var(--surface-2); padding: 1px 5px; border-radius: 5px; font-size: 11px; }
+
+/* ============================================================ 7. app mockup */
+.app-frame {
+  border: 1px solid var(--border); border-radius: var(--r-panel); overflow: hidden;
+  display: grid; grid-template-columns: 240px 1fr; height: 620px; background: var(--bg);
+}
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.sidebar .side-h { font-size: var(--t-11); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding: 0 8px 8px; display: flex; justify-content: space-between; align-items: center; }
+.side-btn { border: none; background: none; color: var(--faint); cursor: pointer; width: 24px; height: 24px; border-radius: var(--r-chip); display: grid; place-items: center; }
+.side-btn:hover { background: var(--surface-2); color: var(--text); }
+.side-btn svg { width: 14px; height: 14px; }
+.bot-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.bot-row:hover { background: var(--surface-2); }
+.bot-row.active { background: var(--accent-soft); }
+.blob { width: 28px; height: 28px; border-radius: 9px; flex: none; }
+.blob.b1 { background: radial-gradient(circle at 38% 35%, #7f93c9, #293352 70%); }
+.blob.b2 { background: radial-gradient(circle at 60% 40%, #9fd6b8, #22885e 75%); }
+.blob.b3 { background: radial-gradient(circle at 50% 60%, #e8b98a, #b06e15 75%); }
+.blob.b4 { background: radial-gradient(circle at 40% 55%, #d69096, #d33a3f 75%); }
+.bot-meta { min-width: 0; flex: 1; }
+.bot-name { font-size: var(--t-13); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bot-state { font-size: var(--t-12); color: var(--faint); }
+.bot-state.busy { color: var(--accent); }
+
+.main-col { display: flex; flex-direction: column; min-width: 0; }
+.session-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); min-height: 52px; }
+.session-title { display: flex; align-items: center; gap: 8px; font-size: var(--t-13); font-weight: 600; }
+.session-title .blob { width: 24px; height: 24px; }
+.session-title .sid { color: var(--faint); font-weight: 500; }
+.session-bar .status-pill { margin-left: auto; }
+.session-actions { display: flex; gap: 6px; }
+
+.transcript { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 20px max(20px, calc((100% - 720px) / 2)); display: flex; flex-direction: column; align-items: stretch; }
+.msg { margin-bottom: 10px; font-size: var(--t-15); line-height: 1.55; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; max-width: 78%; }
+.msg.user .bubble { background: var(--bubble); border-radius: var(--r-bubble); padding: 9px 13px; white-space: pre-wrap; }
+.msg.user.queued .bubble { opacity: 0.6; }
+.queued-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: var(--r-pill); border: 1px solid var(--border); color: var(--muted); font-size: var(--t-11); vertical-align: 2px; animation: breathe 2s var(--ease) infinite; }
+.msg.assistant { align-self: stretch; max-width: min(100%, 720px); }
+.msg.assistant.error .txt { color: var(--error); }
+
+.step { margin: 3px 0; }
+.step > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 6px; font: var(--t-12)/1.7 var(--mono); overflow: hidden; }
+.step > summary::-webkit-details-marker { display: none; }
+.step .b { color: var(--faint); flex: none; }
+.step .n { color: var(--muted); flex: none; }
+.step .n::after { content: ":"; color: var(--faint); }
+.step .x { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step[open] > summary .x { white-space: pre-wrap; overflow: visible; }
+.step.tool .n { color: var(--text); }
+.step.tool.failed .n { color: var(--error); }
+.step .out { margin: 5px 0 3px; padding: 9px 11px; background: var(--surface); border-radius: 10px; font: var(--t-12)/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; overflow-x: auto; }
+.step.tool .out { color: var(--ok); background: var(--ok-bg); }
+.step.tool.failed .out { color: var(--error); background: var(--error-bg); }
+
+@keyframes dots { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
+
+/* reserved: the stop pill while running uses the danger pair */
+
+.note { align-self: center; color: var(--faint); font-size: var(--t-12); text-align: center; margin: 10px 0; }
+.note.err { color: var(--error); }
+
+.md p { margin: 8px 0; }
+.md p:first-child { margin-top: 0; }
+.md p:last-child { margin-bottom: 0; }
+.md code { background: var(--bubble); padding: 1px 5px; border-radius: 5px; font-family: var(--mono); font-size: 12.5px; }
+.md pre { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font: 400 var(--t-12)/1.5 var(--mono); }
+.md .lnk { color: var(--accent); }
+
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px max(20px, calc((100% - 720px) / 2)) 14px; border-top: 1px solid var(--border); background: var(--bg); }
+.composer .field {
+  flex: 1; min-height: 44px; max-height: 130px; padding: 12px 16px;
+  border: 1px solid var(--border); border-radius: 22px; background: var(--bg);
+  font: 400 var(--t-15)/1.4 var(--sans); color: var(--text); outline: none; resize: none;
+  transition: border-color var(--dur-out) var(--ease);
+}
+.composer .field:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.send {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: var(--accent); color: var(--accent-on); cursor: pointer;
+  display: grid; place-items: center; transition: background var(--dur-out) var(--ease);
+}
+.send:hover { background: var(--accent-hover); }
+.send svg { width: 18px; height: 18px; }
+
+/* ============================================================ 8. mobile drawer */
+.phone-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.phone {
+  width: 320px; height: 560px; border: 1px solid var(--border); border-radius: 28px;
+  background: var(--bg); overflow: hidden; position: relative; flex: none;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.10);
+}
+.mobile-top {
+  display: flex; align-items: center; gap: 8px; min-height: 52px;
+  padding: 0 8px 0 4px; border-bottom: 1px solid var(--border); background: var(--bg);
+  position: relative; z-index: 3;
+}
+.mobile-top .mstatus { margin-left: auto; margin-right: 6px; }
+.mobile-transcript { position: absolute; inset: 52px 0 0; padding: 14px 14px; overflow-y: auto; display: flex; flex-direction: column; }
+.drawer-scrim {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0;
+  pointer-events: none; transition: opacity var(--dur-out) var(--ease); z-index: 4;
+}
+.drawer {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 240px;
+  background: var(--surface); border-right: 1px solid var(--border);
+  transform: translateX(-100%); transition: transform var(--dur-in) var(--ease);
+  z-index: 5; padding: 12px 10px; display: flex; flex-direction: column; gap: 2px;
+}
+.drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px 10px; font-size: var(--t-11); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.phone.open .drawer-scrim { opacity: 1; pointer-events: auto; }
+.phone.open .drawer { transform: none; }
+.phone .mobile-top .bot-name { font-size: var(--t-15); }
+
+/* hit target compare */
+.hit-compare { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+.hit { display: flex; align-items: center; gap: 6px; font-size: var(--t-12); color: var(--muted); }
+.hit .ref { width: 44px; height: 44px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-items: center; color: var(--accent); }
+
+/* ============================================================ 9. before/after */
+.ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .ba { grid-template-columns: 1fr; } }
+.ba .col { border-radius: var(--r-panel); border: 1px dashed var(--faint); padding: 14px; }
+.ba .col.after { border: 1px solid var(--accent); }
+.ba h4 { margin: 0 0 10px; font-size: var(--t-12); text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 600; }
+.ba h4.good { color: var(--ok); }
+.old-accent { color: #ff6b35; font-weight: 600; }
+.old-stop { background: #fff1ec; color: #d9480f; border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+
+/* ============================================================ 10. implementation */
+.check-list { margin: 0; padding: 0; list-style: none; }
+.check-list li { border-bottom: 1px solid var(--border); padding: 12px 4px; display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: baseline; font-size: var(--t-14, 14px); }
+.check-list li:last-child { border-bottom: none; }
+.check-list .num { color: var(--accent); font-weight: 700; font-size: var(--t-13); }
+.check-list b { color: var(--text); font-weight: 600; }
+.check-list .coderef { font-family: var(--mono); font-size: var(--t-11); color: var(--faint); }
+
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--faint); font-size: var(--t-12); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+@media (max-width: 760px) {
+  .app-frame { grid-template-columns: 1fr; height: auto; }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--border); flex-direction: row; overflow-x: auto; }
+  .sidebar .side-h { display: none; }
+  .transcript { padding: 16px 14px; }
+  .composer { padding: 10px 14px 14px; }
+  .msg.user { max-width: 88%; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead">
+  <div class="mode-toggle" role="group" aria-label="appearance for this page only">
+    <button id="mAuto" class="active">auto</button>
+    <button id="mLight">light</button>
+    <button id="mDark">dark</button>
+  </div>
+  <div class="sec-tag">bots web client — design plan v1</div>
+  <h1>Quiet chrome, loud agent</h1>
+  <p>A living reference. Everything on this page is the final CSS meant for <code>packages/web/src/style.css</code> — components render in their target form, the tokens at the top of this file are the source to copy. Toggle the appearance switch to preview both themes; the app itself follows the OS only.</p>
+</header>
+
+<nav class="toc">
+  <a href="#principles">Principles</a>
+  <a href="#color">Color</a>
+  <a href="#type">Typography</a>
+  <a href="#shape">Shape &amp; spacing</a>
+  <a href="#icons">Icons</a>
+  <a href="#motion">Motion</a>
+  <a href="#components">Components</a>
+  <a href="#mobile">Mobile</a>
+  <a href="#before-after">Before / after</a>
+  <a href="#impl">Implementation</a>
+</nav>
+
+<!-- ==================================================== 1 -->
+<section id="principles">
+  <div class="sec-tag">01 · foundations</div>
+  <h2>Principles</h2>
+  <p class="why">Five decisions made up front; every rule below follows from one of these.</p>
+  <div class="principles">
+    <div class="principle"><h3>HIG quality bar, not a costume</h3><p>We take Apple's discipline — hierarchy through type, rhythm through spacing, motion that explains, restraint everywhere. We skip the acting: no liquid glass, no fake iOS, no shadows pretending. It's a web app and it's honest about it.</p></div>
+    <div class="principle"><h3>The transcript is the product</h3><p>iMessage metaphor for messages: bubbles carry the chat, chrome recedes. The agent's work folds away; the answer is the only thing claiming visual weight.</p></div>
+    <div class="principle"><h3>One accent, meaning never adjacent to decoration</h3><p>Brand blue <span style="color:var(--accent);font-weight:600">#293352</span> is the only interactive color. Status colors (ok, error, warn) talk about processes only — never about things you can press. Orange is gone.</p></div>
+    <div class="principle"><h3>One motion vocabulary</h3><p>A single easing curve and two durations for the entire app. Motion plays only on state change; hover gets an instant color shift; streamed text glides, never jitters.</p></div>
+    <div class="principle"><h3>Performance is a design constraint</h3><p>System fonts, inline SVG, transform/opacity animation only, append-only transcript, rAF-smoothed scroll. Nothing here costs a frame or a kilobyte of font.</p></div>
+  </div>
+</section>
+
+<!-- ==================================================== 2 -->
+<section id="color">
+  <div class="sec-tag">02 · foundation</div>
+  <h2>Color</h2>
+  <p class="why">HIG: "avoid using the same color to mean different things." The palette is one navy family plus three re-tinted semantic hues. Semantic values are Apple's hues pulled toward the brand's ~220° coolness; every value has a dark variant — dark values are not inversions, they're re-lifted (HIG dark-mode rule).</p>
+
+  <div class="demo">
+    <div class="demo-label">system tokens</div>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--accent),var(--accent-hover))"></div><div class="meta"><div class="role">Brand blue — interactive</div><div class="vals">#293352 / #8fa8e0</div><div class="use">Things you press, live agent activity, focus rings, links. Nothing else.</div></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--accent-soft)"></div><div class="meta"><div class="role">Accent soft</div><div class="vals">#eceef4 / #232a3d</div><div class="use">Tinted surfaces: selected list row, busy pill background.</div></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--ok))"></div><div class="meta"><div class="role">Success</div><div class="vals">#22885e / #4fc489</div><div class="use">Tool output that succeeded. Green text on a green-tinted surface, per HIG success pair.</div></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--error))"></div><div class="meta"><div class="role">Error</div><div class="vals">#d33a3f / #ff6b6e</div><div class="use">Failures only. Pushed pink-red so it can never be confused with brand or warn.</div></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--warn))"></div><div class="meta"><div class="role">Warning</div><div class="vals">#b06e15 / #e0a352</div><div class="use">Truncated context, degraded states. Amber, muted — distinct from both error and accent.</div></div></div>
+      <div class="swatch"><div class="chip" style="background:linear-gradient(180deg,var(--surface),var(--surface-2))"></div><div class="meta"><div class="role">Surfaces</div><div class="vals">#fff · #f7f7f8 · #ececee</div><div class="use">Dark mode layers base → elevated instead: background recedes, panels advance (HIG).</div></div></div>
+    </div>
+  </div>
+
+  <div class="rules">
+    <b>Rules</b>
+    <ul>
+      <li>Brand blue never styles static text. If it doesn't do something when you click it, it isn't blue.</li>
+      <li>Green/red/amber never style anything interactive. If you can press it, it's chrome, not a status.</li>
+      <li>Color is never the only signal — every state also has text (HIG inclusive-color rule). "failed" is the word red accompanies, not replaces.</li>
+      <li>Body text contrast ≥ 4.5:1 everywhere; we aim at HIG's 7:1 for the small sizes (11–12px).</li>
+    </ul>
+  </div>
+
+  <div class="demo">
+    <div class="demo-label">status pills — the feedback vocabulary, live</div>
+    <div class="status-row">
+      <span class="status-pill idle"><span class="dot"></span>idle</span>
+      <span class="status-pill busy"><span class="dot"></span>running</span>
+      <span class="status-pill ok"><span class="dot"></span>tool ok</span>
+      <span class="status-pill warn"><span class="dot"></span>compacting</span>
+      <span class="status-pill error"><span class="dot"></span>failed</span>
+    </div>
+    <p class="demo-note">One component, five states, all from tokens. The busy dot breathes on the shared <code style="font-family:var(--mono);font-size:11px">--ease</code> curve — continuous, non-precise, never orange.</p>
+  </div>
+</section>
+
+<!-- ==================================================== 3 -->
+<section id="type">
+  <div class="sec-tag">03 · foundation</div>
+  <h2>Typography</h2>
+  <p class="why">System font stack (SF on every Apple device you demo this on, native look on others) — zero payload, HIG's own choice. The hierarchy is a fixed ramp that mirrors iOS text styles: a size belongs to a role, and roles don't ad-lib sizes. HIG minimums respected (iOS min 11pt; body at 15 for chat readability).</p>
+
+  <div class="ramp">
+    <div class="ramp-row"><div class="ramp-spec"><b>large title</b>28px · 700 · −2% tracking</div><div class="ramp-sample" style="font-size:var(--t-28);font-weight:700;letter-spacing:-0.02em">Design plan</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>title</b>20px · 700</div><div class="ramp-sample" style="font-size:var(--t-20);font-weight:700">Section heading</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>headline</b>17px · 600</div><div class="ramp-sample" style="font-size:var(--t-17);font-weight:600">Session or card title</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>body</b>15px · 400 · 1.55 lh</div><div class="ramp-sample" style="font-size:var(--t-15)">Transcript text, both bubbles and answers. This is iMessage's body size — the size the product reads at.</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>chrome label</b>13px · 500–600</div><div class="ramp-sample" style="font-size:var(--t-13);font-weight:500">Sidebar rows, buttons, field labels</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>meta</b>12px · 400 · mono</div><div class="ramp-sample" style="font:400 var(--t-12)/1.6 var(--mono)">• bash: ls -la — tool steps and output live here</div></div>
+    <div class="ramp-row"><div class="ramp-spec"><b>caption</b>11px · 600 · +8% track · caps</div><div class="ramp-sample" style="font-size:var(--t-11);font-weight:600;letter-spacing:0.08em;text-transform:uppercase">Section tags like TOOL RESULT</div></div>
+  </div>
+
+  <div class="demo">
+    <div class="demo-label">the rule the ramp enforces</div>
+    <p style="margin:0;font-size:var(--t-14,14px);color:var(--muted)">Every existing one-off size (11.5, 12.5, 13.5, 14, 14.5) snaps to a nearest ramp step. The transcript reads at <b>15</b>; the work reads at <b>12 mono</b>; the chrome reads at <b>13</b>. You should never see two similar-but-different sizes on one screen.</p>
+  </div>
+</section>
+
+<!-- ==================================================== 4 -->
+<section id="shape">
+  <div class="sec-tag">04 · foundation</div>
+  <h2>Shape &amp; spacing</h2>
+  <p class="why">Flat-first, hairline borders, elevation only where something genuinely floats (the ↓ latest button, the mobile drawer). One radius scale, one spacing grid — rhythm instead of random.</p>
+
+  <div class="demo">
+    <div class="demo-label">radius scale — 6 / 12 / 16 / 999</div>
+    <div class="radius-row">
+      <div class="radius-box"><div class="box" style="border-radius:6px"></div><div class="lab">6 · chips, small</div></div>
+      <div class="radius-box"><div class="box" style="border-radius:12px"></div><div class="lab">12 · panels, inputs, steps</div></div>
+      <div class="radius-box"><div class="box" style="border-radius:16px"></div><div class="lab">16 · chat bubbles</div></div>
+      <div class="radius-box"><div class="box" style="border-radius:999px"></div><div class="lab">999 · pills</div></div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="demo-label">spacing — 4px grid: 4 / 8 / 12 / 16 / 20 / 24</div>
+    <div class="space-row"><span style="width:3ch">4</span><span class="bar" style="width:4px"></span> icon-to-label gaps, chips internal</div>
+    <div class="space-row"><span style="width:3ch">8</span><span class="bar" style="width:8px"></span> inside components: message gaps, list rows</div>
+    <div class="space-row"><span style="width:3ch">12</span><span class="bar" style="width:12px"></span> between related groups</div>
+    <div class="space-row"><span style="width:3ch">16</span><span style="width:16px"></span><span class="bar" style="width:16px"></span> component padding</div>
+    <div class="space-row"><span style="width:3ch">20</span><span class="bar" style="width:20px"></span> transcript horizontal padding</div>
+    <div class="space-row"><span style="width:3ch">24</span><span class="bar" style="width:24px"></span> section rhythm, screen padding</div>
+  </div>
+
+  <div class="rules">
+    <b>Depth rules</b>
+    <ul>
+      <li>Flat surfaces separate by hairline <code style="font-family:var(--mono);font-size:11px">--border</code>, never stacked shadows. In dark mode separation comes from layering: base #131519, elevated #1f232a, panels #1a1d22.</li>
+      <li>Elevation only for floating elements: ↓ latest button, mobile drawer + scrim. Nothing else casts a shadow.</li>
+      <li>Bubbles are uniform 16px radius — no asymmetric iMessage tails. The chat metaphor lives in placement and grouping, not in shape cosplay.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================================================== 5 -->
+<section id="icons">
+  <div class="sec-tag">05 · foundation</div>
+  <h2>Icons</h2>
+  <p class="why">Lucide, adopted open library — SF Symbols' stroke style, MIT, tree-shaken inline SVG so the palette tokens color them for free. icon color = currentColor always; stroke 2 at 16px, 1.5 at 20px+; icons always carry a label or an accessible name (they accelerate, they don't riddle). Escape hatch: any icon can later be swapped for a hand-drawn one without touching the system.</p>
+
+  <div class="demo">
+    <div class="demo-label">the set this app needs — inline, stroke, currentColor</div>
+    <div class="icon-row">
+      <button class="icon-btn filled" title="send (arrow-up)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
+      <button class="icon-btn" title="stop (square)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></button>
+      <button class="icon-btn" title="refresh (rotate-cw)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="icon-btn" title="new session (plus)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+      <button class="icon-btn" title="open drawer (menu)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg></button>
+      <button class="icon-btn" title="jump to latest (arrow-down)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></button>
+      <button class="icon-btn" title="compact (fold-vertical)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3-3-3 3"/><path d="m15 5-3 3-3-3"/></svg></button>
+      <button class="icon-btn danger demo" style="color:var(--error)" title="close (x)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      <span style="font-size:var(--t-12);color:var(--muted);margin-left:6px">↑ icon button = 44×44 touch surface (HIG minimum target)</span>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="demo-label">command pills vs icon buttons</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="pill-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>stop</button>
+      <button class="pill-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3-3-3 3"/><path d="m15 5-3 3-3-3"/></svg>compact</button>
+      <button class="pill-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>new</button>
+      <span style="font-size:var(--t-12);color:var(--muted);align-self:center">verbs of consequence keep their words — icon + label</span>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================== 6 -->
+<section id="motion">
+  <div class="sec-tag">06 · foundation</div>
+  <h2>Motion</h2>
+  <p class="why">HIG: motion supports the experience, never overshadows it; frequent interactions get no added motion; people can always cancel it. Level-2 commitment: a single easing vocabulary + choreographed state transitions + silky stream follow. <code style="font-family:var(--mono);font-size:11px">prefers-reduced-motion</code> collapses every animation on this page — that's a feature, not a bug (it's how the shipping app behaves under the setting).</p>
+
+  <div class="demo">
+    <div class="demo-label">the vocabulary</div>
+    <table style="width:100%;border-collapse:collapse;font-size:var(--t-13)">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">easing — the one curve</td><td style="font-family:var(--mono);font-size:12px">cubic-bezier(0.2, 0, 0, 1)</td><td style="color:var(--faint)">fast out, glide in — iOS spring family, decelerate feel</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 4px;color:var(--muted)">duration — entering / expanding</td><td style="font-family:var(--mono);font-size:12px">--dur-in: 220ms</td><td style="color:var(--faint)">new content rising in, drawer, folds</td></tr>
+      <tr><td style="padding:8px 4px;color:var(--muted)">duration — leaving / hover</td><td style="font-family:var(--mono);font-size:12px">--dur-out: 160ms</td><td style="color:var(--faint)">dismissals and hover color shifts</td></tr>
+    </table>
+  </div>
+
+  <div class="demo">
+    <div class="demo-label">live demos — replay each</div>
+    <div class="replay-row">
+      <button class="pill-btn" id="replayEnter">↺ replay enter</button>
+      <button class="pill-btn" id="replayTravel">↺ replay easing</button>
+    </div>
+    <div class="curve-demo">
+      <div class="track"><div class="lane"><div class="knob" id="knob"></div></div><div class="curve-note">one knob, one curve — how every transition in the app moves</div></div>
+      <div class="box-enter" id="enterBox">a new entry <br>rises as a whole</div>
+    </div>
+    <details class="fold" style="margin-top:12px">
+      <summary><span class="chev">▶</span> tool: read one fold of the agent's work</summary>
+      <div class="fold-body">Open/close is a details toggle + chevron rotation on --dur-out. Height animates implicitly by content; no JS measure, no layout thrash.</div>
+    </details>
+    <p class="demo-note">Hover on any pill above → the fill changes instantly (≤160ms color transition, no travel). Motion only ever plays when a state actually flipped.</p>
+  </div>
+
+  <div class="stream-demo">
+    <div class="stream-head">
+      <span class="st">the generation spine — run it and watch</span>
+      <span class="status-pill idle" id="streamPill"><span class="dot"></span><span id="streamState">idle</span></span>
+      <button class="pill-btn" id="streamBtn">run a turn</button>
+    </div>
+    <div class="live-window" id="liveWindow"><p class="live-line" id="liveLine"></p></div>
+    <div class="live-summary-line"><div class="live-summary" id="liveSummary" hidden><span id="liveSummaryText"></span><span class="chev">›</span></div></div>
+    <div id="streamScroll"></div>
+    <button class="jump" id="jumpBtn">↓ latest <span class="spin" id="jumpSpin" hidden></span></button>
+    <div class="jitter-note">The spine, in order: <b>window</b> — while the model works, its text lives in a fixed masked window (above) and translates smoothly through it, DeepSeek-style; when work settles it collapses to a <span style="color:var(--accent)">thought for …</span> row that expands. <b>reveal</b> — every token chunk fades in (~150ms opacity + 1.5px blur) on arrival; no cursor — the pill's breathing dot already says “running”. <b>scroll</b> — <code>scrollTop</code> lerps toward the bottom in a rAF loop (~75ms time constant), never jumps; a chunk landing elsewhere never steals the viewport — scroll up and the follow stops, the jump pill appears (spinner while running, plain when idle) and glides you back. The reveal rate needs no syncing logic: fade duration &lt; median inter-token interval, so visibility simply follows tps.</div>
+  </div>
+</section>
+
+<!-- ==================================================== 7 -->
+<section id="components">
+  <div class="sec-tag">07 · the app mock</div>
+  <h2>Components</h2>
+  <p class="why">The whole client in its target form, from the real structure (sidebar / session bar / transcript / composer). Everything is live: scroll the transcript, run a turn, open tool steps. Text is 15 chrome 13, steps 12 mono — the ramp in place.</p>
+
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="side-h">bots<button class="side-btn" title="refresh fleet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button></div>
+      <div class="bot-row active"><div class="blob b1"></div><div class="bot-meta"><div class="bot-name">dev</div><div class="bot-state busy">running a routine</div></div></div>
+      <div class="bot-row"><div class="blob b2"></div><div class="bot-meta"><div class="bot-name">time-management</div><div class="bot-state">idle</div></div></div>
+      <div class="bot-row"><div class="blob b3"></div><div class="bot-meta"><div class="bot-name">contacts</div><div class="bot-state">idle</div></div></div>
+      <div class="bot-row"><div class="blob b4"></div><div class="bot-meta"><div class="bot-name">eu</div><div class="bot-state">idle</div></div></div>
+    </aside>
+    <div class="main-col">
+      <div class="session-bar">
+        <div class="session-title"><div class="blob b1"></div><span>dev</span><span class="sid">· session 7f3a</span></div>
+        <span class="status-pill busy"><span class="dot"></span>running</span>
+        <span class="session-actions">
+          <button class="pill-btn" style="padding:6px 12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>stop</button>
+          <button class="pill-btn" style="padding:6px 12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-6"/><path d="M12 8V2"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/><path d="m15 19-3-3-3 3"/><path d="m15 5-3 3-3-3"/></svg>compact</button>
+        </span>
+      </div>
+      <div class="transcript">
+        <div class="msg user"><div class="bubble">check what's failing the connector tests in packages/web</div></div>
+        <details class="reason-row" open><summary><span class="chev">›</span>reading the failing cases — the thinking, one quiet italic line…</summary>
+          <div class="rbody">Full reasoning text lives here when unfolded — upsert keys, session mapping, everything the model thought. Quieter than tool rows: no status, no color, and it auto-collapses when the turn rolls over.</div>
+        </details>
+        <details class="tool-row"><summary><span class="tdot ok"></span><span class="tn">bash</span><span class="tx">cd packages/web &amp;&amp; npx vitest run 2&gt;&amp;1 | tail -20</span></summary>
+          <div class="tr-body"><div class="tr-cmd">$ cd packages/web &amp;&amp; npx vitest run 2&gt;&amp;1 | tail -20</div><div class="tr-out">✓ session-tree.test.ts (8)
+✗ transcript.test.ts — 2 failed</div></div>
+        </details>
+        <div class="msg assistant">
+          <div class="txt md"><p>Two failures, both in upsert-pairing of tool results while streaming:</p><p><code>pause</code> expects the tool row keyed by <code>call_id</code>, but <code>toUiEntries</code> keys by index — duplicated rows while streaming (<span class="lnk">foldSession#upsertTool</span>).</p></div>
+        </div>
+        <div class="msg user queued"><div class="bubble">also summarize the patch in one line<span class="queued-tag">queued</span></div></div>
+        <details class="step"><summary><span class="b" style="color:var(--accent)">▾</span><span class="n" style="color:var(--muted)">folded work</span><span class="x">3 steps · 2.1s · +1.4k tok</span></summary>
+          <div class="out">one entry per answer, the agent's work folds beneath it — HIG progressive disclosure, the trace lives here instead of the chat</div>
+        </details>
+        <details class="tool-row failed"><summary><span class="tdot err"></span><span class="tn">bash</span><span class="tx">reconnect the SSE bridge (retry №3)</span></summary>
+          <div class="tr-body"><div class="tr-out">reconnect: upstream didn't answer within 5000ms</div></div>
+        </details>
+        <details class="tool-row"><summary><span class="tdot wait"></span><span class="tn">bash</span><span class="tx">pytest -q gearbox/tests/steering</span></summary></details>
+        <div class="msg assistant error"><div class="txt"><p>gearbox disconnected before the run finished: the SSE socket closed mid-turn (retry №3 exhausted). The session wasn't lost — reattach resumes from the last replayed event.</p></div></div>
+        <div class="note">turn marker — note line, centered, the quietest voice on the page</div>
+        <div class="msg assistant"><div class="txt md">The fix is a one-liner in <code>upsertTool</code>: key by <code>call_id</code> falling back to index. Want me to apply it and rerun the suite?</div></div>
+      </div>
+      <div class="composer">
+        <textarea class="field" placeholder="Message dev — Enter sends, Shift+Enter breaks"></textarea>
+        <button class="send" title="send (enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="demo-note" style="margin-top:10px">Order of visual authority in the transcript, top down: answers (body 15) → your messages (bubble) → error text (red as text color only) → tool rows (12 mono, collapsed, status dot) → reasoning (13 italic faint) → notes (12 centered). The chat carries the conversation; the work folds under it. Tool results are hidden until you ask — the dot is the only thing the state costs.</p>
+</section>
+
+<!-- ==================================================== 8 -->
+<section id="mobile">
+  <div class="sec-tag">08 · adaptability</div>
+  <h2>Mobile</h2>
+  <p class="why">Same components reflow; the sidebar becomes a drawer slid from the leading edge (HIG's own secondary-navigation pattern, reusing the one easing). Below 800px the top bar owns identity: blob + agent name + status; menu on the left. Hit targets hold at 44px (HIG minimum) even when the row visually shrinks to 30.</p>
+
+  <div class="phone-row">
+    <div class="phone" id="phone">
+      <div class="drawer-scrim" id="scrim"></div>
+      <aside class="drawer">
+        <div class="drawer-head">bots<button class="side-btn" title="close" id="closeDrawer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+        <div class="bot-row active"><div class="blob b1"></div><div class="bot-meta"><div class="bot-name">dev</div><div class="bot-state busy">running a routine</div></div></div>
+        <div class="bot-row"><div class="blob b2"></div><div class="bot-meta"><div class="bot-name">time-management</div><div class="bot-state">idle</div></div></div>
+        <div class="bot-row"><div class="blob b3"></div><div class="bot-meta"><div class="bot-name">contacts</div><div class="bot-state">idle</div></div></div>
+        <div class="bot-row"><div class="blob b4"></div><div class="bot-meta"><div class="bot-name">eu</div><div class="bot-state">idle</div></div></div>
+      </aside>
+      <div class="mobile-top">
+        <button class="icon-btn" id="openDrawer" style="width:40px;height:40px;border:none;background:none" title="open bot list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg></button>
+        <div class="blob b1" style="width:26px;height:26px"></div>
+        <div class="bot-meta"><div class="bot-name" style="font-size:var(--t-15)">dev</div></div>
+        <span class="status-pill busy mstatus"><span class="dot"></span>running</span>
+      </div>
+      <div class="mobile-transcript">
+        <div class="msg user"><div class="bubble">morning review please</div></div>
+        <div class="msg assistant"><div class="txt md">Overnight: three routine runs — the inbox sweep found nothing actionable, linkers daily had one item (tender deadline moved), jax GPU notes committed to memory.</div></div>
+        <div class="msg assistant"><div class="txt md" style="color:var(--muted);font-size:13px">One failure: contacts routine hit a rate limit — retried once, next slot in 40 min.</div></div>
+        <div class="msg user"><div class="bubble">ok — anything I need to decide today?</div></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <div class="demo" style="margin-top:0">
+        <div class="demo-label">44px — HIG minimum hit target</div>
+        <div class="hit-compare">
+          <div class="hit"><span class="ref"><svg viewBox="0 0 24 24" style="width:18px;height:18px" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></span> every tappable control carries a ≥44×44 zone</div>
+        </div>
+        <p class="demo-note">The send button, menu, icon pills and list rows render at their visual size but the touch zone is enforced — visually small, physically comfortable. This is the one place we borrow iOS rights wholesale: it's touch, the rules are physics.</p>
+      </div>
+      <div class="rules">
+        <b>Reflow rules</b>
+        <ul>
+          <li>Sidebar → drawer (open it from the phone's menu button — demo above). Inspector link returns to the same drawer.</li>
+          <li>Body stays 15px; bubbles reach 88% width; transcript padding drops to 14px.</li>
+          <li>Composer and stop stay fixed to the bottom edge — thumb zone.</li>
+          <li>No hover-dependent states are load-bearing (hover is decoration only).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================== 9 -->
+<section id="before-after">
+  <div class="sec-tag">09 · delta</div>
+  <h2>Before / after</h2>
+  <p class="why">Where the change is visible at a glance. Everything else improves silently through the tokens.</p>
+  <div class="ba">
+    <div class="col">
+      <h4>before — color does three jobs</h4>
+      <div class="status-row" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <span><span class="old-accent">running</span> · orange accent · darker orange error — one hue means busy, brand, and danger nearly simultaneously</span>
+        <span class="old-stop">stop — tinted the same warm family</span>
+        <span>one-off sizes: 11.5 · 12.5 · 13.5 · 14 · 14.5 — no rule, no rhythm</span>
+      </div>
+    </div>
+    <div class="col after">
+      <h4 class="good">after — color means one thing</h4>
+      <div class="status-row" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <span class="status-row"><span class="status-pill busy"><span class="dot"></span>running</span> brand blue owns interaction &amp; liveness</span>
+        <span class="status-row"><span class="status-pill error"><span class="dot"></span>failed</span> error is pink-red, unmistakable</span>
+        <span>5-step ramp · one easing · 4px grid · radius scale</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================== 10 -->
+<section id="impl">
+  <div class="sec-tag">10 · shipping</div>
+  <h2>Implementation</h2>
+  <p class="why">Ordered so each step improves the app on its own; no step is a rewrite.</p>
+  <div class="check-list">
+    <li><span class="num">1</span><div><b>Tokens + dark mode.</b> Replace the <code class="coderef">:root</code> block in <code class="coderef">style.css</code> with the token sheet from the top of this file (plus the <code class="coderef">@media (prefers-color-scheme: dark)</code> mirror). <code class="coderef">color-scheme</code> follows the OS; no toggle in the app.</div></li>
+    <li><span class="num">2</span><div><b>Ramp sweep.</b> Every font-size snaps to a token; transcript body 14.5→15, chrome 13, steps stay 12 mono, captions 11 caps.</div></li>
+    <li><span class="num">3</span><div><b>Accent migration.</b> All <code class="coderef">#ff6b35</code> uses → <code class="coderef">var(--accent)</code>; error → <code class="coderef">--error</code> (pink-red pair); stop button loses its warm tint, becomes a danger pill (icon + label). Status pill component arrives here.</div></li>
+    <li><span class="num">4</span><div><b>Motion tokens.</b> All keyframes adopt <code class="coderef">--ease</code> + the two durations. Spin/pulse keep their periods but breathe on the shared curve. No cursor anywhere — running state lives in the status pill's breathing dot.</div></li>
+    <li><span class="num">5</span><div><b>Generation spine, A — scroll.</b> rAF lerp on <code class="coderef">#transcript.scrollTop</code> in <code class="coderef">main.ts</code>, exponential glide (≈75ms time constant). Auto-follow only when the reader is at the bottom; otherwise the floating <b>↓ latest</b> pill shows (spinner inside while generating, plain when idle) and jumps with the same glide. Testable alone.</div></li>
+    <li><span class="num">6</span><div><b>Generation spine, B — reveal.</b> Each streamed token chunk is wrapped and faded in on arrival (<b>~150ms opacity + 1.5px blur</b>; fade shorter than the median inter-token interval, so perceived pace tracks tps with no syncing logic). No new dependency — this is what <code class="coderef">smoothStream()</code> does server-side, done where it belongs (see “Streaming” note below).</div></li>
+    <li><span class="num">7</span><div><b>Generation spine, C — live window.</b> While the model works, thinking/tool text lives in a fixed ~3-line masked window whose content translates smoothly through it (DeepSeek-style); on settle it collapses to a <b>thought for X s ›</b> row that expands on tap. Tool rows: call text truncated one line, status dot (green landed / red failed / spinner running), full call + result unfold on tap; reasoning as a quiet italic collapsible that auto-collapses at turn end.</div></li>
+    <li><span class="num">8</span><div><b>Lucide inline.</b> 8 icons in a TS module (plain <code class="coderef">svgPath</code> strings), stroke inherits <code class="coderef">currentColor</code>. Send/menu/refresh/new/latest/compact get icon buttons at 44px zones; stop keeps a word.</div></li>
+    <li><span class="num">9</span><div><b>Mobile drawer.</b> Below 800px: top bar identity row + drawer sheet with scrim, reusing the level-2 easing; existing resize/localStorage logic stays desktop-only.</div></li>
+    <li><span class="num">10</span><div><b>Radii + spacing sweep.</b> Ad-hoc radii → the 6/12/16/999 scale; paddings snapped to the 4px grid.</div></li>
+  </div>
+  <p class="demo-note">Accepted tradeoffs, in one line each: no manual theme toggle in the app (OS-follow is the behavior, revisit when there's a settings screen); open Lucide icons may feel generic (swap any for hand-drawn strokes when it itches); bubbles are uniform-radius, so no iMessage tail cosplay.</p>
+  <div class="rules">
+    <b>Streaming — where the smoothing lives</b>
+    <ul>
+      <li>We don't own a <code style="font-family:var(--mono);font-size:11px">streamText()</code> layer, so AI SDK's <code style="font-family:var(--mono);font-size:11px">smoothStream()</code> isn't directly applicable; the bridge could re-emit on a fixed timer, but a fixed delay masks real tps changes (lag pile-up on bursts, dead air on pauses).</li>
+      <li>Chosen: do it client-side, where the pixels are — keep a small pending buffer in <code style="font-family:var(--mono);font-size:11px">main.ts</code>, drain on each <code style="font-family:var(--mono);font-size:11px">requestAnimationFrame</code> with the fade above; a backlog after a burst simply resolves over the next frames, visible pace always equals the model's real pace. ~30 lines, no dependency.</li>
+      <li>A React token-animation lib (FlowToken et al.) is the same idea with a React tax we don't pay. If we ever port the client to React + AI SDK, <code style="font-family:var(--mono);font-size:11px">smoothStream()</code> becomes viable behind identical pixels.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  bots design plan · v1 · living reference: same tokens as <code>packages/web/src/style.css</code> targets · grounded in Apple's Human Interface Guidelines (color, dark mode, typography, motion, feedback, layout) as of Sep 2026
+</footer>
+</div>
+
+<script>
+/* ---------- theme (demo page only: auto / light / dark) ---------- */
+const root = document.documentElement;
+const setEdge = (el, on) => el.classList.toggle("active", on);
+const mAuto = document.getElementById("mAuto"), mLight = document.getElementById("mLight"), mDark = document.getElementById("mDark");
+function applyMode(m) {
+  if (m === "auto") { root.removeAttribute("data-mode"); setEdge(mAuto, true); setEdge(mLight, false); setEdge(mDark, false); }
+  else { root.setAttribute("data-mode", m); setEdge(mAuto, false); setEdge(mLight, m === "light"); setEdge(mDark, m === "dark"); }
+  document.querySelectorAll(".swatch .vals").forEach(v => { /* hex labels stay static; chips are live vars */ });
+}
+mAuto.onclick = () => applyMode("auto"); mLight.onclick = () => applyMode("light"); mDark.onclick = () => applyMode("dark");
+
+/* ---------- motion replays ---------- */
+const knob = document.getElementById("knob"), enterBox = document.getElementById("enterBox");
+document.getElementById("replayEnter").onclick = () => { enterBox.classList.remove("show"); void enterBox.offsetWidth; enterBox.classList.add("show"); };
+document.getElementById("replayTravel").onclick = () => { knob.parentElement.parentElement.classList.remove("play"); void knob.offsetWidth; knob.parentElement.parentElement.classList.add("play"); };
+
+/* ---------- the generation spine demo ---------- */
+const sc = document.getElementById("streamScroll");
+const state = document.getElementById("streamState"), pill = document.getElementById("streamPill"), btn = document.getElementById("streamBtn");
+const win = document.getElementById("liveWindow"), line = document.getElementById("liveLine");
+const sum = document.getElementById("liveSummary"), sumText = document.getElementById("liveSummaryText");
+const jump = document.getElementById("jumpBtn"), jumpSpin = document.getElementById("jumpSpin");
+let follow = true, last = performance.now();
+function now() { return performance.now(); }
+function tick(t) {
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  /* follow: exponential glide toward the end, ~75ms time constant.
+     Big gaps still land softly (never a per-chunk snap). */
+  if (follow) {
+    const d = sc.scrollHeight - sc.clientHeight - sc.scrollTop;
+    if (d > 0.5) sc.scrollTop += d * (1 - Math.exp(-dt / 0.075));
+  }
+  const above = sc.scrollHeight - sc.scrollTop - sc.clientHeight > 60;
+  jump.classList.toggle("show", above);
+  jumpSpin.hidden = document.body.dataset.spine !== "run";
+  /* live window: translate the growing line smoothly through the mask */
+  const h = win.clientHeight, overflow = Math.max(0, line.offsetHeight + 24 - h);
+  if (overflow > 0) win._ty = (win._ty || 0) * (1 - Math.exp(-dt / 0.07)) + overflow * (1 - Math.exp(-dt / 0.07));
+  else win._ty = (win._ty || 0) * Math.exp(-dt / 0.05);
+  if (win._ty > 0.5) line.style.transform = "translateY(" + (-win._ty).toFixed(2) + "px)";
+  else if (win._ty <= 0.5) line.style.transform = "";
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+sc.addEventListener("scroll", () => { follow = sc.scrollHeight - sc.scrollTop - sc.clientHeight <= 60; }, { passive: true });
+jump.onclick = () => { follow = true; };
+sum.onclick = () => win.classList.toggle("open");
+
+function el(cls) { const d = document.createElement("div"); if (cls) d.className = cls; return d; }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* fade every streamed token chunk in on arrival — a span per chunk,
+   opacity + a whisper of blur, 150ms. Reveal rate follows tps by construction. */
+function paintChunk(parent, text, cls) {
+  const s = document.createElement("span"); s.className = "w-fade" + (cls ? " " + cls : ""); s.textContent = text;
+  parent.appendChild(s);
+}
+
+const act = [
+  { k: "think", t: "Tracing the steer path: queue_update lands before run_aborted on the same tick, and the bridge reorders them because each SSE event is handled in its own microtask." },
+  { k: "tool", name: "read", args: "bridge/session.ts (steer/abort handlers)", after: "handled in two places — flushSteer() on update, drainQueue() on abort" },
+  { k: "think", t: "Fix: drain the queue synchronously inside the abort handler, then emit run_aborted last." },
+  { k: "tool", name: "edit", args: "bridge/session.ts (queue drain)", after: "8 lines changed — no new state" },
+  { k: "reply", t: "Fixed. The race was between queue_update and run_aborted: pi emits both on one tick, the bridge processed them out of order and re-primed the queue after the abort had already cleared it. Draining synchronously in the abort handler fixes it — two steering tests pass now." },
+];
+
+const THE_THINK = act.filter(a => a.k === "think").map(a => a.t).join(" ");
+
+async function run() {
+  btn.disabled = true; follow = true;
+  document.body.dataset.spine = "run";
+  state.textContent = "thinking"; pill.className = "status-pill busy";
+  line.textContent = ""; win.classList.remove("open"); sum.hidden = true;
+  const t0 = now();
+  /* thinking streams through the live window */
+  for (const w of THE_THINK.match(/\S+ ?/g)) {
+    paintChunk(line, w);
+    await sleep(26 + Math.random() * 54);
+  }
+  /* tools run, statuses tick over */
+  for (const a of act.filter(a => a.k === "tool")) {
+    const row = el("tool-row");
+    row.innerHTML = '<summary><span class="tdot wait"></span><span class="tn"></span><span class="tx"></span></summary><div class="tr-body"><div class="tr-out"></div></div>';
+    row.querySelector(".tn").textContent = a.name;
+    row.querySelector(".tx").textContent = a.args;
+    sc.appendChild(row); await sleep(700 + Math.random() * 500);
+    row.querySelector(".tdot").className = "tdot ok";
+    row.querySelector(".tr-out").textContent = a.after;
+    row.open = false;
+  }
+  /* work settles: window collapses to its summary row */
+  state.textContent = "answering";
+  const secs = ((now() - t0) / 1000).toFixed(1);
+  sumText.textContent = "thought for " + secs + " s";
+  line.textContent = THE_THINK;
+  win._ty = 0; line.style.transform = "";
+  win.style.height = "30px"; await sleep(240); win.style.height = ""; win.style.height = "0px"; await sleep(30);
+  win.hidden = true; sum.hidden = false;
+  /* answer streams with the word fade, no cursor */
+  let ans = null;
+  for (const w of act[act.length - 1].t.match(/\S+ ?/g)) {
+    if (!ans) { ans = el("smsg"); sc.appendChild(ans); }
+    paintChunk(ans, w);
+    await sleep(30 + Math.random() * 60);
+    if (Math.random() < 0.1) await sleep(140 + Math.random() * 200);
+  }
+  document.body.dataset.spine = "";
+  state.textContent = "idle"; pill.className = "status-pill idle"; btn.disabled = false;
+}
+btn.onclick = async () => { pill.className = "status-pill busy"; sc.textContent = ""; win.hidden = false; win.style.height = ""; await run(); };
+if (location.hash === "#spine") { const t = document.getElementById("streamBtn"); queueMicrotask(() => t.click()); }
+
+/* ---------- drawer ---------- */
+const phone = document.getElementById("phone");
+document.getElementById("openDrawer").onclick = () => phone.classList.add("open");
+document.getElementById("closeDrawer").onclick = () => phone.classList.remove("open");
+document.getElementById("scrim").onclick = () => phone.classList.remove("open");
+
+/* demo deep-link: #mode=dark / #mode=light (handy for screenshots) */
+const hm = /^#mode=(dark|light)$/.exec(location.hash);
+if (hm) applyMode(hm[1]);
+
+/* keep demos alive on theme switch live */
+const mq = matchMedia("(prefers-color-scheme: dark)");
+mq.addEventListener("change", () => { if (root.getAttribute("data-mode") === null) applyMode("auto"); });
+</script>
+</body>
+</html>
