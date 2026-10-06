@@ -20,17 +20,12 @@
  * Ceiling: no JS execution — pages that render client-side return only their
  * static HTML (often empty). Add a Playwright/Chromium DOM fallback when
  * JS-rendered pages start to matter; do not start with screenshots.
- *
- * ptc: `web_search` and `web_fetch` are registered for programmatic calling
- * (extensions/ptc). Each fetch returns up to 120k chars, so a program fanning
- * out over many URLs must slice inside the program — the whole point of ptc.
  */
 
 import { spawn } from "node:child_process";
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { registerPtcTool } from "../ptc/registry.ts";
 
 const DEFAULT_SEARX_BASE = "http://127.0.0.1:8888";
 const SEARCH_TIMEOUT_MS = 20_000;
@@ -420,39 +415,6 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 			};
 		},
 	});
-
-	// ptc binding: structured results for search fan-out inside programs.
-	// Signature documents the binding contract; behavior docs stay in the
-	// web_search tool description (single source of truth).
-	registerPtcTool(
-		"web_search",
-		async (args) => {
-			const query = String(args.query ?? "");
-			if (!query) throw new Error("web_search: query is required");
-			const maxResults = clampCount(Number(args.max_results));
-			const timeRange = typeof args.time_range === "string" ? args.time_range : undefined;
-			const { results, unresponsive } = await withSearchSlot(() =>
-				searxSearch(query, maxResults, timeRange, undefined),
-			);
-			return {
-				query,
-				results: results.map(({ title, url, content }) => ({ title, url, content })),
-				unresponsive_engines: unresponsive,
-			};
-		},
-		{ signature: "{ query, max_results?, time_range? } → { query, results: {title,url,content}[], unresponsive_engines: [string,string][] }" },
-	);
-
-	// ptc binding: structured fetch results for URL fan-out inside programs.
-	registerPtcTool(
-		"web_fetch",
-		async (args) => {
-			const url = String(args.url ?? "");
-			if (!url) throw new Error("web_fetch: url is required");
-			return fetchAndExtract(url, undefined);
-		},
-		{ signature: "{ url } → { url, title, content, method, truncated }" },
-	);
 
 	pi.registerTool({
 		name: "web_fetch",

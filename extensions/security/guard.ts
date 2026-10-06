@@ -55,11 +55,11 @@ const PATH_TOOLS = new Set(["read", "grep", "find", "ls", "edit", "write"]);
 const NIX_SUBCOMMANDS = new Set(["run", "shell", "develop", "build", "exec"]);
 
 function programReason(name: string): string {
-	return `Blocked by the security guard: direct use of \`${name}\` is disabled so secret values never reach the transcript. Use the bash tool's \`secrets\` parameter (or ptc's \`secrets_sh\`) with a profile name instead.`;
+	return `Blocked by the security guard: direct use of \`${name}\` is disabled so secret values never reach the transcript. Use the bash tool's \`secrets\` parameter with a profile name instead.`;
 }
 
 function pathReason(fragment: string): string {
-	return `Blocked by the security guard: ${fragment} is a credential store. Use a secrets profile (bash \`secrets\` parameter or ptc \`secrets_sh\`) instead of reading it directly.`;
+	return `Blocked by the security guard: ${fragment} is a credential store. Use a secrets profile (the bash tool's \`secrets\` parameter) instead of reading it directly.`;
 }
 
 function extraReason(): string {
@@ -142,25 +142,6 @@ function extraMatches(text: string, settings: GuardSettings): boolean {
 	return false;
 }
 
-/** Source-file extensions: `…/security/rbw.ts` is a module path (honest
- *  imports, this extension's own tests), not something you can run. */
-const SOURCE_EXT = /^\.(?:[cm]?[jt]sx?|json|md)\b/;
-
-/** Check a ptc program: it runs arbitrary Node, so only catch blatant words.
- *  A mention naming a source file is allowed, matching the bash check where a
- *  path in an argument is not a program in command position. */
-export function checkPtcCode(code: string, settings: GuardSettings): string | null {
-	const lowered = code.toLowerCase();
-	for (const fragment of PATH_FRAGMENTS) {
-		if (lowered.includes(fragment)) return pathReason(fragment);
-	}
-	for (const match of lowered.matchAll(/\b(rbw|bitwarden)\b/g)) {
-		if (SOURCE_EXT.test(lowered.slice(match.index + match[0].length))) continue;
-		return programReason(match[1]);
-	}
-	return null;
-}
-
 /** Check any tool call input. Returns a block reason or null. */
 export function checkToolInput(toolName: string, input: Record<string, unknown>, settings: GuardSettings): string | null {
 	if (settings.disabled) return null;
@@ -168,9 +149,8 @@ export function checkToolInput(toolName: string, input: Record<string, unknown>,
 	for (const text of strings) {
 		if (extraMatches(text, settings)) return extraReason();
 	}
-	// bash and ptc execute arbitrary code: check the whole input.
+	// bash executes arbitrary code: check the whole input.
 	if (toolName === "bash") return checkCommand(String(input.command ?? ""), settings);
-	if (toolName === "ptc") return checkPtcCode(typeof input.code === "string" ? input.code : "", settings);
 	// File tools: only the path can leak store *contents*. Writing text that
 	// merely mentions a store path (docs, configs, this extension's own tests)
 	// is fine, so content/pattern fields are not checked here.

@@ -10,12 +10,11 @@
  *   - rbw: profile resolution, unknown profile, locked vault hint
  *   - redact: exact/base64/hex/URL/JSON variants, longest-first, min length,
  *             idempotency, first-name-wins
- *   - guard: command-position program matching, path fragments, ptc code
+ *   - guard: command-position program matching, path fragments
  *   - bash override: stock behavior preserved, `secrets` env injection,
  *                    unknown profile error, tool_call guard wiring
  *   - tool_result redaction + provider payload scrub
  *   - session_start warmup
- *   - ptc `secrets_sh` binding
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -29,7 +28,6 @@ import { loadConfig } from "../config.ts";
 import { resolveAll, resolveProfile } from "../rbw.ts";
 import { Redactor, placeholder, redactDeep } from "../redact.ts";
 import { checkCommand, checkToolInput } from "../guard.ts";
-import { getPtcTool } from "../../ptc/registry.ts";
 
 // ── tiny test runner ──────────────────────────────────────────────────────
 
@@ -161,8 +159,6 @@ securityExtension(pi);
 
 const bashTool = pi.tools.get("bash");
 assert(bashTool, "bash tool registered (override)");
-const secretsSh = getPtcTool("secrets_sh");
-assert(secretsSh, "secrets_sh registered with the ptc registry");
 
 async function runBash(params, ctx = makeCtx()) {
 	return bashTool.execute("call-1", params, undefined, undefined, ctx);
@@ -341,30 +337,6 @@ test("guard: tool inputs", () => {
 	assert(checkToolInput("read", { path: "/home/denis/.pi/agent/auth.json" }, GUARD), "auth.json read");
 	assert(checkToolInput("read", { path: "/home/denis/dev/pi-setup/README.md" }, GUARD) === null, "normal read");
 	assert(checkToolInput("bash", { command: "rbw get X" }, GUARD), "bash command");
-	assert(checkToolInput("ptc", { code: "const x = await sh({command: 'rbw get X'});" }, GUARD), "ptc code");
-	assert(checkToolInput("ptc", { code: "const {output} = await secrets_sh({profile: 'forgejo', command: 'git push'});" }, GUARD) === null, "secrets_sh allowed");
-});
-
-test("guard: ptc allows source-file mentions, blocks executions", () => {
-	const allowed = [
-		'const { resolveProfile } = await import("/home/denis/dev/pi-bots/extensions/security/rbw.ts");',
-		'const src = readFileSync("extensions/security/rbw.ts", "utf8");',
-		'await sh({ command: "grep -n resolveProfile extensions/security/rbw.ts" });',
-		'// resolveProfile lives in security/rbw.ts',
-	];
-	for (const code of allowed) {
-		assert(checkToolInput("ptc", { code }, GUARD) === null, `should allow: ${code}`);
-	}
-	const blocked = [
-		'const x = await sh({ command: "rbw get Jellyfin" });',
-		'execFileSync("/usr/bin/rbw", ["get", "Jellyfin"]);',
-		'spawnSync("rbw", ["unlock"]);',
-		'await sh({ command: "/home/denis/.local/bin/rbw list" });',
-		'const bin = "bitwarden"; await sh({ command: `${bin} list` });',
-	];
-	for (const code of blocked) {
-		assert(checkToolInput("ptc", { code }, GUARD), `should block: ${code}`);
-	}
 });
 
 test("guard: file tools check the path, not the content", () => {
@@ -408,10 +380,6 @@ test("bash override: description and guidelines carry the contract", () => {
 	assertMatch(bashTool.parameters.properties.secrets.description, /available: jellyfin, forgejo/, "param description lists names");
 	assert((bashTool.promptGuidelines ?? []).some((g) => /secrets/.test(g)), "guideline present");
 	assert(bashTool.name === "bash" && bashTool.label, "stock fields preserved");
-});
-
-test("ptc signature lists the configured profile names", () => {
-	assertMatch(secretsSh.signature, /"jellyfin" \| "forgejo"/, `signature: ${secretsSh.signature}`);
 });
 
 test("bash override: `secrets` injects env and does not leak via details", async () => {
@@ -523,31 +491,6 @@ test("before_provider_request: scrubs nested payload in place", async () => {
 	};
 	await pi.emit("before_provider_request", { type: "before_provider_request", payload }, makeCtx());
 	assert(payload.messages[0].content[0].text === `leak ${placeholder("JELLYFIN_API_KEY")}`, "payload scrubbed");
-});
-
-test("ptc registry: separate module instances share one store (pi isolates extensions)", async () => {
-	// pi loads each extension with its own module instance, so a module-scoped
-	// registry would hide registrations from the ptc extension.
-	const url = new URL("../../ptc/registry.ts", import.meta.url);
-	const isolated = await import(`${url.href}?instance=2`);
-	isolated.registerPtcTool("__isolation_probe__", () => "first");
-	assert(getPtcTool("__isolation_probe__")?.run() === "first", "visible through the first instance");
-	isolated.registerPtcTool("__isolation_probe__", () => "second");
-	assert(getPtcTool("__isolation_probe__")?.run() === "second", "last write wins across instances");
-});
-
-test("ptc secrets_sh: injects env, returns redacted output", async () => {
-	const result = await secretsSh.run(
-		{ profile: "forgejo", command: 'printf "%s" "$FORGEJO_TOKEN"' },
-		makeCtx(),
-	);
-	assert(result.output === placeholder("FORGEJO_TOKEN"), `output: ${JSON.stringify(result.output)}`);
-	assert(result.code === 0, "exit code");
-});
-
-test("ptc secrets_sh: plain command output passes through", async () => {
-	const result = await secretsSh.run({ profile: "forgejo", command: "printf 'hello'" }, makeCtx());
-	assert(result.output === "hello" && result.code === 0, `output: ${JSON.stringify(result)}`);
 });
 
 runTests();

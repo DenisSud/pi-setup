@@ -6,7 +6,6 @@
  * exactly one command:
  *
  *   bash { command: 'curl -H "Authorization: token $FORGEJO_TOKEN" …', secrets: "forgejo" }
- *   ptc  → await secrets_sh({ profile: "forgejo", command: 'curl …' })
  *
  * Profiles are references (vault item + field) resolved through the `rbw`
  * CLI; see config.ts for the config file shape. On top of that:
@@ -24,14 +23,11 @@
  */
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createBashToolDefinition, createLocalBashOperations } from "@earendil-works/pi-coding-agent";
-import { registerPtcTool } from "../ptc/registry.ts";
+import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
 import { loadConfig, type SecurityConfig } from "./config.ts";
 import { checkToolInput } from "./guard.ts";
 import { resolveAll, resolveProfile } from "./rbw.ts";
 import { Redactor, redactDeep } from "./redact.ts";
-
-const PTC_OUTPUT_CAP = 50_000;
 
 function errorText(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
@@ -146,7 +142,6 @@ export default function security(pi: ExtensionAPI) {
 	// a profile by name without guessing and reading an error first.
 	let profileSummary = "none configured (add profiles to ~/.pi/agent/security.json)";
 	let profileNames: string[] = [];
-	let ptcProfileType = "profile";
 	try {
 		const cfg = loadConfig();
 		profileNames = Object.keys(cfg.profiles);
@@ -157,7 +152,6 @@ export default function security(pi: ExtensionAPI) {
 					return description ? `${name} (${description})` : name;
 				})
 				.join("; ");
-			ptcProfileType = profileNames.map((name) => `"${name}"`).join(" | ");
 		}
 	} catch (err) {
 		profileSummary = `unavailable — ${errorText(err)}`;
@@ -180,7 +174,7 @@ export default function security(pi: ExtensionAPI) {
 			".",
 		promptGuidelines: [
 			...(proto.promptGuidelines ?? []),
-			"Never fetch, echo, or copy credential values. Pass the bash tool's `secrets` parameter with a profile name (ptc programs: `secrets_sh`) and reference names like $FORGEJO_TOKEN in the command; output containing a secret value is replaced with «redacted:NAME».",
+			"Never fetch, echo, or copy credential values. Pass the bash tool's `secrets` parameter with a profile name and reference names like $FORGEJO_TOKEN in the command; output containing a secret value is replaced with «redacted:NAME».",
 		],
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -200,36 +194,5 @@ export default function security(pi: ExtensionAPI) {
 			return tool.execute(toolCallId, rest as never, signal, onUpdate, ctx);
 		},
 	});
-
-	// ── ptc binding ──────────────────────────────────────────────────────
-
-	registerPtcTool(
-		"secrets_sh",
-		async (args, ctx) => {
-			const profile = String(args.profile ?? "");
-			const command = String(args.command ?? "");
-			if (!profile) throw new Error("secrets_sh: profile is required");
-			if (!command) throw new Error("secrets_sh: command is required");
-			const env = await resolveProfile(getConfig(), profile);
-			redactor.addEnv(env);
-
-			const cwd = typeof (ctx as { cwd?: unknown } | undefined)?.cwd === "string" ? (ctx as { cwd: string }).cwd : process.cwd();
-			const timeoutMs = Number(args.timeout_ms) > 0 ? Number(args.timeout_ms) : 60_000;
-			let output = "";
-			const { exitCode } = await createLocalBashOperations().exec(command, cwd, {
-				env: { ...process.env, ...env },
-				timeout: timeoutMs,
-				onData: (chunk) => {
-					output += chunk.toString();
-				},
-			});
-			const redacted = redactor.redact(output);
-			const capped = redacted.length > PTC_OUTPUT_CAP ? `${redacted.slice(0, PTC_OUTPUT_CAP)}\n…[truncated]` : redacted;
-			return { output: capped, code: exitCode };
-		},
-		{
-			signature: `{ ${ptcProfileType}, command, timeout_ms? } → { output, code } — runs the command with the profile's credentials in env; output is redacted`,
-		},
-	);
 
 }

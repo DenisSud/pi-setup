@@ -1,16 +1,9 @@
 {
-  "name": "pi-bots",
+  "name": "pi-setup",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
   "type": "module",
-  "scripts": {
-    "build": "bun run --cwd packages/web build",
-    "test": "bun run --cwd packages/connector test"
-  },
-  "description": "Base of Denis's pi setup: the extensions, skills, rules and tooling every agent and bot loads",
+  "description": "Denis's personal pi package: extensions and skills, installed by ~/.pi/agent.",
   "keywords": [
     "pi-package"
   ],
@@ -21,6 +14,11 @@
     "skills": [
       "./skills"
     ]
+  },
+  "dependencies": {
+    "html-to-text": "10.0.1",
+    "iconv-lite": "0.6.3",
+    "imapflow": "2.2.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

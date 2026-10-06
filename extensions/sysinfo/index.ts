@@ -1,13 +1,19 @@
 /**
  * sysinfo — fastfetch-style system info injection
  *
- * Discovers OS, hardware, time, and locale metadata on session start
- * and injects it into the system prompt so the model knows the machine
- * it's running on.
+ * Discovers OS, hardware, time, and locale metadata on session start and
+ * contributes them as the <system_info> prompt section, so the model knows
+ * the machine it's running on without forcing a whole system prompt.
+ *
+ * GPU handling: name and UUID come from /proc (reading them does not wake a
+ * runtime-suspended GPU); the fixed VRAM total is cached on disk per UUID so
+ * nvidia-smi — which wakes a suspended GPU for ~2 s — only runs for a device
+ * that has never been seen before.
  */
 import * as os from "node:os";
 import * as fs from "node:fs";
 import { execFileSync } from "node:child_process";
+import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -32,16 +38,6 @@ function readFile(path: string): string {
   }
 }
 
-function parseDataSize(value: number, unit: string): number {
-  const u = unit.toUpperCase();
-  if (u === "B") return value;
-  if (u === "KB" || u === "KIB") return value * 1024;
-  if (u === "MB" || u === "MIB") return value * 1024 ** 2;
-  if (u === "GB" || u === "GIB") return value * 1024 ** 3;
-  if (u === "TB" || u === "TIB") return value * 1024 ** 4;
-  return value;
-}
-
 function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let unit = 0;
@@ -53,16 +49,91 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-function formatGpu(csv: string): string {
-  // nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-  // e.g. "NVIDIA GeForce RTX 5070, 12227 MiB"
-  const parts = csv.split(",").map((s) => s.trim());
-  if (parts.length !== 2) return csv;
-  const [name, memRaw] = parts;
-  const m = memRaw.match(/^([\d.]+)\s*([A-Za-z]+)$/);
-  if (!m) return csv;
-  const bytes = parseDataSize(parseFloat(m[1]), m[2]);
-  return `${name} (${formatBytes(bytes)})`;
+// ── gpu cache ────────────────────────────────────────────────────────
+
+const GPU_PROC_DIR = "/proc/driver/nvidia/gpus";
+const CACHE_VERSION = 1;
+
+interface GpuCache {
+  version: number;
+  gpus: Record<string, { vramBytes: number; updatedAt: string }>;
+}
+
+function cachePath(): string {
+  const agentDir = process.env.PI_CODING_AGENT_DIR || join(os.homedir(), ".pi", "agent");
+  return join(agentDir, "tmp", "sysinfo-gpu.json");
+}
+
+function loadGpuCache(): GpuCache {
+  try {
+    const parsed = JSON.parse(readFile(cachePath())) as GpuCache;
+    if (parsed.version === CACHE_VERSION && parsed.gpus && typeof parsed.gpus === "object") {
+      return parsed;
+    }
+  } catch {
+    // missing or corrupt cache — rebuilt on demand below
+  }
+  return { version: CACHE_VERSION, gpus: {} };
+}
+
+function saveGpuCache(cache: GpuCache): void {
+  try {
+    const file = cachePath();
+    fs.mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(cache, null, 2)}\n`);
+    fs.renameSync(tmp, file);
+  } catch {
+    // the cache is an optimization — never fail startup because of it
+  }
+}
+
+interface GpuInfo {
+  name: string;
+  uuid: string;
+}
+
+/** Name/UUID via /proc: cheap and safe even while the GPU is suspended. */
+function discoverGpus(): GpuInfo[] {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(GPU_PROC_DIR);
+  } catch {
+    return [];
+  }
+  const gpus: GpuInfo[] = [];
+  for (const entry of entries) {
+    const text = readFile(join(GPU_PROC_DIR, entry, "information"));
+    const name = text.match(/^Model:\s+(.+)$/m)?.[1];
+    const uuid = text.match(/^GPU UUID:\s+(.+)$/m)?.[1];
+    if (name && uuid) gpus.push({ name, uuid });
+  }
+  return gpus;
+}
+
+/** VRAM totals by GPU UUID. The total is a fixed property of the device, so
+ *  it is fetched once per UUID with nvidia-smi and cached on disk. */
+function gpuVramBytes(uuids: string[]): Record<string, number> {
+  const cache = loadGpuCache();
+  if (uuids.some((uuid) => !(uuid in cache.gpus))) {
+    const out = exec("nvidia-smi", ["--query-gpu=uuid,memory.total", "--format=csv,noheader,nounits"]);
+    let dirty = false;
+    for (const row of out.split("\n")) {
+      const [uuid, mib] = row.split(",").map((s) => s.trim());
+      const bytes = Number(mib) * 1024 * 1024;
+      if (uuid && Number.isFinite(bytes) && bytes > 0) {
+        cache.gpus[uuid] = { vramBytes: bytes, updatedAt: new Date().toISOString() };
+        dirty = true;
+      }
+    }
+    if (dirty) saveGpuCache(cache);
+  }
+  const result: Record<string, number> = {};
+  for (const uuid of uuids) {
+    const bytes = cache.gpus[uuid]?.vramBytes;
+    if (bytes) result[uuid] = bytes;
+  }
+  return result;
 }
 
 // ── discovery ────────────────────────────────────────────────────────
@@ -86,10 +157,13 @@ function discoverStatic(): Record<string, string> {
   const cpuThreads = os.cpus().length;
   info["CPU"] = `${cpuModel} (${cpuThreads} threads)`;
 
-  // GPU
-  const gpuCheck = exec("nvidia-smi", ["--query-gpu=name,memory.total", "--format=csv,noheader"]);
-  if (gpuCheck) {
-    info["GPU"] = formatGpu(gpuCheck);
+  // GPU — name via /proc (no GPU wake), VRAM total cached per UUID
+  const gpus = discoverGpus();
+  if (gpus.length > 0) {
+    const vram = gpuVramBytes(gpus.map((g) => g.uuid));
+    info["GPU"] = gpus
+      .map((g) => (vram[g.uuid] ? `${g.name} (${formatBytes(vram[g.uuid])})` : g.name))
+      .join(", ");
   }
 
   // RAM
@@ -144,21 +218,8 @@ export default function sysinfo(pi: ExtensionAPI) {
       .join("\n");
   });
 
-  pi.on("before_agent_start", async (event) => {
-    if (!staticInfoText) return;
-
-    return {
-      systemPrompt:
-        event.systemPrompt +
-        `
-
-## System Information
-
-You are running on the following machine:
-
-${staticInfoText}
-Current time: ${new Date().toString()}
-`,
-    };
+  pi.on("before_agent_start", (event) => {
+    const lines = [staticInfoText, `Current time: ${new Date().toString()}`].filter(Boolean);
+    event.systemPromptOptions.sections.system_info = `You are running on the following machine:\n\n${lines.join("\n")}`;
   });
 }

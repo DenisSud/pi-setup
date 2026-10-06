@@ -7,7 +7,7 @@
  * not on PATH) — PATH is manipulated per test to force each branch.
  *
  * Tests:
- *   - tools + ptc binding registered
+ *   - tools registered
  *   - search success / max_results clamp / time_range / empty / API error /
  *     unreachable / abort
  *   - HTML extraction (trafilatura), pandoc fallback, missing-extractor error
@@ -23,7 +23,6 @@ import { existsSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import createExtension from "../index.ts";
-import { listPtcTools } from "../../ptc/registry.ts";
 
 // The extension reads this per call; keep it fake so the search tests never
 // depend on a running instance. The live test sets it back.
@@ -147,16 +146,9 @@ createExtension(pi);
 const search = pi.tools.get("web_search");
 const fetchTool = pi.tools.get("web_fetch");
 
-test("registers web_search, web_fetch, and the ptc bindings", () => {
+test("registers web_search and web_fetch", () => {
 	assert(search, "web_search tool registered");
 	assert(fetchTool, "web_fetch tool registered");
-	assert(
-		listPtcTools().some((t) => t.name === "web_search"),
-		"web_search registered for ptc",
-	);
-	const fetchBinding = listPtcTools().find((t) => t.name === "web_fetch");
-	assert(fetchBinding, "web_fetch registered for ptc");
-	assert(fetchBinding.signature.includes("{ url }"), "fetch binding signature documented");
 });
 
 // ── web_search ────────────────────────────────────────────────────────────

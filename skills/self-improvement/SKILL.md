@@ -29,7 +29,7 @@ fires.
 
 A skill that has run routinely — about three times, or on a natural cadence —
 is a candidate for firing without a person. Write the spec to
-`<bot>/automations/<name>.md`, then ask Denis before it runs anywhere.
+`<bot>/automations/<name>.md`, then ask the user before it runs anywhere.
 
 ```markdown
 ---
@@ -44,15 +44,38 @@ The prompt to run, or the steps the bot takes.
 
 Hard limits:
 
-- Never install external packages, skills or extensions — Denis decides those.
+- Never install external packages, skills or extensions — the user decides those.
 - Never automate credential handling, irreversible actions, or anything
   outward-facing (mail, other people's calendars, money) without explicit
   approval.
 - Never automate work whose benefit is in the doing — the cognitive-benefit
-  boundary in `~/Bots/docs/productivity.md`. Brain dumps, priority calls and
-  learning stay Denis's.
+  boundary. Brain dumps, priority calls and learning stay the user's.
 - Every automation is idempotent, owned by one bot, and off by default
   (`enabled: false`) until approved.
 
-Done when the spec is committed and Denis has approved, or the spec is
+Done when the spec is committed and the user has approved, or the spec is
 disabled and waiting.
+
+## Evolution track (pi platform)
+
+Above automation sits **self-evolution**: changing the agent's own wiring —
+new extensions, event hooks, always-on triggers — so the system improves
+between sessions, not just within them.
+
+- **Hooks on external events** (calendar reminders, Forgejo issues/PRs, opengym
+  logs, mail) can trigger agent action automatically once Denis runs an
+  always-on pi instance; until then, event hooks fire at the next session.
+- **The ladder for evolution:** repeat → skill → automation → **extension/hook**
+  (compiled into the platform itself, e.g. the mem0 extension, the calendar
+  extension). An extension is the last rung: only when a skill/automation has
+  proven stable for a while.
+- **Proposal flow:** every candidate goes through a weekly-review proposal
+  (max 2): name it, name the hook/trigger, the payoff, and the rung. Denis
+  approves before anything is built.
+- **Consequential self-modification** (new extension, hook that can act
+  outward, prompt-file edits beyond the append file) always get a review
+  *before* merge — like the mem0 extension review: built, then Denis reads
+  the design before it goes live.
+- **The growth boundary is absolute:** agents prepare and organize; thinking,
+  deciding, learning, writing stay Denis's. Automation removes drudgery, not
+  judgment.
