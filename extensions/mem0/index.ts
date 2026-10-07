@@ -52,6 +52,8 @@ const SETTINGS_KEY = 'pi-memory-mem0';
 const STATUS_KEY = 'mem0';
 const MEMORY_TOOL_NAME = 'mem0_memory';
 const SESSION_RECALL_ENTRY = 'mem0-session-recall';
+/** `/mem0 profile` lists this many; the header still reports the exact count. */
+const PROFILE_MAX_LINES = 100;
 
 function agentDir(): string {
   return process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
@@ -454,8 +456,11 @@ export default function mem0Extension(pi: ExtensionAPI): void {
           if (all.length === 0) {
             ctx.ui.notify('No memories stored yet.', 'info');
           } else {
-            const lines = all.map((m, i) => `${i + 1}. ${formatRecalledMemory(m.memory)}`);
-            ctx.ui.notify(`Mem0 memories (${all.length}):\n${lines.join('\n')}`, 'info');
+            const shown = all.slice(0, PROFILE_MAX_LINES);
+            const lines = shown.map((m, i) => `${i + 1}. ${formatRecalledMemory(m.memory)}`);
+            const rest = all.length - shown.length;
+            const overflow = rest > 0 ? `\n\u2026 ${rest} more` : '';
+            ctx.ui.notify(`Mem0 memories (${all.length}):\n${lines.join('\n')}${overflow}`, 'info');
           }
           break;
         }
