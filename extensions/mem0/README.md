@@ -57,8 +57,10 @@ Live as an experiment against the self-hosted service (its own repo,
 the gate and the relevance filter run. Extraction runs server-side on a local
 model, and the service filters on ingest and output itself — which makes the
 extension's own gate and recall filter redundant, so they come out in the
-rework. Known gaps (top_k, dedup ≥1000, redaction holes, recall-block
-accumulation) are a checklist in #34.
+rework. Known gaps (redaction holes, recall-block accumulation) are a
+checklist in #2. Listing sends the service's cap (`top_k=10,000`) so status,
+profile and dedup see the whole store; dedup still refuses when a page comes
+back full.
 
 ## Layout
 

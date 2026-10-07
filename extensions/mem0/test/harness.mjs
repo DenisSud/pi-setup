@@ -351,6 +351,7 @@ test("provider: add/search/getAll/delete wire format", async () => {
 		const getRequest = server.requests.find((r) => r.method === "GET");
 		assert(getRequest.url.includes("user_id=u1"), getRequest.url);
 		assert(getRequest.url.includes("agent_id=a1"), getRequest.url);
+		assert(getRequest.url.includes("top_k=10000"), getRequest.url);
 
 		await provider.delete("mem 1");
 		assert(server.requests.some((r) => r.method === "DELETE" && r.url === "/memories/mem%201"));
@@ -374,6 +375,46 @@ test("provider: non-ok responses throw with status", async () => {
 			message = err.message;
 		}
 		assertEqual(message, "Mem0 request failed (401).");
+	} finally {
+		await server.close();
+	}
+});
+
+test("provider: dedup lists through the service cap", async () => {
+	const server = await startServer((record, res) => {
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify({ results: [{ id: "1", memory: "one" }, { id: "2", memory: "two" }] }));
+		return true;
+	});
+	try {
+		const provider = await createMem0Provider({ config: { baseUrl: server.url } });
+		const groups = await provider.getDedupGroups({ userId: "u1" });
+		const request = server.requests.find((r) => r.method === "GET");
+		assert(request.url.includes("top_k=10000"), request.url);
+		assertEqual(groups[0].length, 2);
+	} finally {
+		await server.close();
+	}
+});
+
+test("provider: dedup refuses a full listing page", async () => {
+	// A full page cannot be told apart from a larger store, so dedup must not
+	// silently scan a truncated set.
+	const items = Array.from({ length: 10000 }, (_, i) => ({ id: `m${i}`, memory: `fact ${i}` }));
+	const server = await startServer((record, res) => {
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify({ results: items }));
+		return true;
+	});
+	try {
+		const provider = await createMem0Provider({ config: { baseUrl: server.url } });
+		let message = "";
+		try {
+			await provider.getDedupGroups({ userId: "u1" });
+		} catch (err) {
+			message = err.message;
+		}
+		assertEqual(message, "Mem0 self-hosted dedup scope may exceed 9999 memories.");
 	} finally {
 		await server.close();
 	}
@@ -695,6 +736,45 @@ test("index: env config drives a full capture cycle", async () => {
 		assertEqual(addRequest.body.messages[0].content, "I prefer tea over coffee.");
 		assertEqual(addRequest.body.messages[1].role, "assistant");
 		assertEqual(addRequest.headers["x-api-key"], "test-key");
+	} finally {
+		for (const [key, value] of Object.entries(saved)) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		fs.rmSync(dir, { recursive: true, force: true });
+		await mem0.close();
+	}
+});
+
+test("index: /mem0 profile caps the listed lines", async () => {
+	const items = Array.from({ length: 130 }, (_, i) => ({ id: `m${i}`, memory: `fact ${i}` }));
+	const mem0 = await startServer((record, res) => {
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify({ results: record.method === "GET" ? items : [] }));
+		return true;
+	});
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mem0-harness-"));
+	fs.writeFileSync(path.join(dir, "settings.json"), "{}");
+	const saved = {};
+	for (const key of ["PI_CODING_AGENT_DIR", "PI_BOT_NAME", "MEM0_BASE_URL", "MEM0_API_KEY"]) {
+		saved[key] = process.env[key];
+	}
+	process.env.PI_CODING_AGENT_DIR = dir;
+	process.env.PI_BOT_NAME = "probe";
+	process.env.MEM0_BASE_URL = mem0.url;
+	process.env.MEM0_API_KEY = "test-key";
+	try {
+		const { api, handlers, commands } = makeApi();
+		mem0Extension(api);
+		const { ctx, notifications } = makeCtx();
+
+		await handlers.get("session_start")[0]({}, ctx);
+		await commands.get("mem0").handler("profile", ctx);
+
+		const message = notifications.at(-1).text;
+		assert(message.startsWith("Mem0 memories (130):"), message.slice(0, 60));
+		assert(message.includes("\u2026 30 more"), message.slice(-80));
+		assertEqual(message.split("\n").length, 102);
 	} finally {
 		for (const [key, value] of Object.entries(saved)) {
 			if (value === undefined) delete process.env[key];

@@ -21,7 +21,12 @@ import type {
 type Mem0ScopeOptions = { userId: string; agentId?: string; signal?: AbortSignal };
 type Mem0AddOptions = Mem0ScopeOptions & { infer?: boolean; observedAt?: Date | string };
 type Mem0SearchOptions = Mem0ScopeOptions & { topK?: number };
-const SELF_HOSTED_DEDUP_LIMIT = 1000;
+/**
+ * The service's cap on one listing request (its `ALL_MEMORIES_LIMIT`). Asking
+ * for more is rejected, so the client asks for exactly this much; status,
+ * profile and dedup then see the whole store up to it.
+ */
+const SELF_HOSTED_LIST_LIMIT = 10_000;
 
 export interface Mem0Provider {
   add(
@@ -207,6 +212,7 @@ class SelfHostedProvider implements Mem0Provider {
   async getAll(opts: Mem0ScopeOptions): Promise<MemoryItem[]> {
     const params = new URLSearchParams({ user_id: opts.userId });
     if (opts.agentId) params.set('agent_id', opts.agentId);
+    params.set('top_k', String(SELF_HOSTED_LIST_LIMIT));
     const result = await this.request(`/memories?${params}`, { method: 'GET' }, opts.signal);
     return normalizeResults(result);
   }
@@ -214,12 +220,12 @@ class SelfHostedProvider implements Mem0Provider {
   async getDedupGroups(opts: Mem0ScopeOptions): Promise<MemoryItem[][]> {
     const params = new URLSearchParams({ user_id: opts.userId });
     if (opts.agentId) params.set('agent_id', opts.agentId);
-    params.set('top_k', String(SELF_HOSTED_DEDUP_LIMIT));
+    params.set('top_k', String(SELF_HOSTED_LIST_LIMIT));
     const result = await this.request(`/memories?${params}`, { method: 'GET' }, opts.signal);
     const memories = normalizeResults(result);
-    if (memories.length >= SELF_HOSTED_DEDUP_LIMIT) {
+    if (memories.length >= SELF_HOSTED_LIST_LIMIT) {
       throw new Error(
-        `Mem0 self-hosted dedup scope may exceed ${SELF_HOSTED_DEDUP_LIMIT - 1} memories.`,
+        `Mem0 self-hosted dedup scope may exceed ${SELF_HOSTED_LIST_LIMIT - 1} memories.`,
       );
     }
     return [memories];
