@@ -11,7 +11,7 @@ export type MemoryUserIdScope = 'project' | 'exact';
 export interface Mem0GateConfig {
   /** Enable the capture gate. Defaults to true when a gate baseUrl is set. */
   enabled?: boolean;
-  /** OpenAI-compatible endpoint root (…/v1), e.g. http://192.168.1.20:11434/v1. */
+  /** OpenAI-compatible endpoint root (…/v1), e.g. http://localhost:11434/v1. */
   baseUrl?: string;
   /** Gate model. Default: "tev1:4b". */
   model?: string;

@@ -5,7 +5,7 @@
  * the profile's credentials are injected as environment variables into
  * exactly one command:
  *
- *   bash { command: 'curl -H "Authorization: token $FORGEJO_TOKEN" …', secrets: "forgejo" }
+ *   bash { command: 'curl -H "Authorization: token $GITHUB_TOKEN" …', secrets: "github" }
  *
  * Profiles are references (vault item + field) resolved through the `rbw`
  * CLI; see config.ts for the config file shape. On top of that:
@@ -174,7 +174,7 @@ export default function security(pi: ExtensionAPI) {
 			".",
 		promptGuidelines: [
 			...(proto.promptGuidelines ?? []),
-			"Never fetch, echo, or copy credential values. Pass the bash tool's `secrets` parameter with a profile name and reference names like $FORGEJO_TOKEN in the command; output containing a secret value is replaced with «redacted:NAME».",
+			"Never fetch, echo, or copy credential values. Pass the bash tool's `secrets` parameter with a profile name and reference names like $GITHUB_TOKEN in the command; output containing a secret value is replaced with «redacted:NAME».",
 		],
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {

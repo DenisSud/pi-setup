@@ -7,14 +7,14 @@ content syncs through git, the machine-local settings do not.
 ## Install
 
 ```sh
-pi install ssh://git@git.sudakov.site:2223/DenisSud/pi-setup.git
+pi install git:github.com/DenisSud/pi-setup
 ```
 
 Project scope, or a specific ref:
 
 ```sh
-pi install -l ssh://git@git.sudakov.site:2223/DenisSud/pi-setup.git
-pi install ssh://git@git.sudakov.site:2223/DenisSud/pi-setup.git@v1
+pi install -l git:github.com/DenisSud/pi-setup
+pi install git:github.com/DenisSud/pi-setup@v1
 ```
 
 Update / remove:

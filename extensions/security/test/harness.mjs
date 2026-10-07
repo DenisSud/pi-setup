@@ -69,7 +69,7 @@ const TMP = fs.mkdtempSync(join(os.tmpdir(), "pi-security-test-"));
 
 const SECRETS = {
 	jellyfin: "jf_live_3f9a1c7d2b8e4f60",
-	forgejo: "fj_tok_a1b2c3d4e5f60718",
+	github: "gh_tok_a1b2c3d4e5f60718",
 	ollama: "ol_9z8y7x6w5v4u3t2s",
 };
 
@@ -88,7 +88,7 @@ while [ $# -gt 0 ]; do
 done
 case "$item/$field" in
   "Jellyfin API/password") printf '%s\\n' "${SECRETS.jellyfin}" ;;
-  "Forgejo Token/password") printf '%s\\n' "${SECRETS.forgejo}" ;;
+  "GitHub Token/password") printf '%s\\n' "${SECRETS.github}" ;;
   "Ollama Cloud/password") printf '%s\\n' "${SECRETS.ollama}" ;;
   "Locked Item/password") echo "Vault is locked. Run rbw unlock" >&2; exit 1 ;;
   *) echo "no item $item" >&2; exit 1 ;;
@@ -105,7 +105,7 @@ const CONFIG = {
 			description: "Jellyfin API token",
 			vars: { JELLYFIN_API_KEY: { item: "Jellyfin API", field: "password" } },
 		},
-		forgejo: { vars: { FORGEJO_TOKEN: "Forgejo Token" } },
+		github: { vars: { GITHUB_TOKEN: "GitHub Token" } },
 		ollama: { vars: { OLLAMA_API_KEY: { item: "Ollama Cloud" } } },
 		locked: { vars: { LOCKED_KEY: { item: "Locked Item" } } },
 	},
@@ -175,9 +175,9 @@ test("config: missing file → empty profiles, defaults", () => {
 
 test("config: loads profiles, shorthand item, defaults nested", () => {
 	const cfg = loadConfig(CONFIG_PATH);
-	assert(Object.keys(cfg.profiles).join(",") === "jellyfin,forgejo,ollama,locked", "profile names");
-	assert(cfg.profiles.forgejo.vars.FORGEJO_TOKEN.item === "Forgejo Token", "shorthand item");
-	assert(cfg.profiles.forgejo.vars.FORGEJO_TOKEN.field === undefined, "field defaulted at resolve time");
+	assert(Object.keys(cfg.profiles).join(",") === "jellyfin,github,ollama,locked", "profile names");
+	assert(cfg.profiles.github.vars.GITHUB_TOKEN.item === "GitHub Token", "shorthand item");
+	assert(cfg.profiles.github.vars.GITHUB_TOKEN.field === undefined, "field defaulted at resolve time");
 	assert(cfg.rbw.command === RBW_PATH, "rbw command");
 });
 
@@ -215,8 +215,8 @@ test("rbw: profile resolves to env map, trailing newline stripped", async () => 
 });
 
 test("rbw: shorthand ref defaults to the password field", async () => {
-	const env = await resolveProfile(loadConfig(CONFIG_PATH), "forgejo");
-	assert(env.FORGEJO_TOKEN === SECRETS.forgejo, "value");
+	const env = await resolveProfile(loadConfig(CONFIG_PATH), "github");
+	assert(env.GITHUB_TOKEN === SECRETS.github, "value");
 });
 
 test("rbw: unknown profile lists available names", async () => {
@@ -373,11 +373,11 @@ test("bash override: description and guidelines carry the contract", () => {
 	assertMatch(bashTool.description, /secrets: "<profile>"/, "description mentions secrets param");
 	assertMatch(bashTool.description, /«redacted:NAME»/, "description mentions marker");
 	// the model must be able to pick a profile without guessing
-	for (const name of ["jellyfin", "forgejo", "ollama", "locked"]) {
+	for (const name of ["jellyfin", "github", "ollama", "locked"]) {
 		assertMatch(bashTool.description, new RegExp(name), `description lists profile ${name}`);
 	}
 	assertMatch(bashTool.description, /Jellyfin API token/, "description carries profile descriptions");
-	assertMatch(bashTool.parameters.properties.secrets.description, /available: jellyfin, forgejo/, "param description lists names");
+	assertMatch(bashTool.parameters.properties.secrets.description, /available: jellyfin, github/, "param description lists names");
 	assert((bashTool.promptGuidelines ?? []).some((g) => /secrets/.test(g)), "guideline present");
 	assert(bashTool.name === "bash" && bashTool.label, "stock fields preserved");
 });
@@ -465,9 +465,9 @@ test("session_start: warms the redactor from every profile", async () => {
 		toolName: "some_other_tool",
 		input: {},
 		isError: false,
-		content: [{ type: "text", text: `token=${SECRETS.forgejo}` }],
+		content: [{ type: "text", text: `token=${SECRETS.github}` }],
 	});
-	assert(result && result.content[0].text === `token=${placeholder("FORGEJO_TOKEN")}`, "warmup redaction works");
+	assert(result && result.content[0].text === `token=${placeholder("GITHUB_TOKEN")}`, "warmup redaction works");
 });
 
 test("tool_result: redacts text, leaves other content untouched", async () => {

@@ -62,7 +62,7 @@ Above automation sits **self-evolution**: changing the agent's own wiring —
 new extensions, event hooks, always-on triggers — so the system improves
 between sessions, not just within them.
 
-- **Hooks on external events** (calendar reminders, Forgejo issues/PRs, opengym
+- **Hooks on external events** (calendar reminders, GitHub issues/PRs, opengym
   logs, mail) can trigger agent action automatically once Denis runs an
   always-on pi instance; until then, event hooks fire at the next session.
 - **The ladder for evolution:** repeat → skill → automation → **extension/hook**
