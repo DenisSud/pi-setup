@@ -60,6 +60,8 @@ pi config
 - **productivity:** daily-planning, teach, tracker, wait-what, weekly-review,
   writing-for-agents
 - **core:** grilling, handoff, self-improvement, show-me, skill-authoring
+- **tools:** agent-browser (browser automation CLI; the skill points at
+  `agent-browser skills get core` so it stays version-matched)
 
 ## Machine-local config
 
@@ -74,7 +76,8 @@ cleaned on update. Per-device config lives in the agent dir:
 | `~/.pi/agent/decision.json` | **retired** — safe to delete |
 
 System dependencies (not npm): `rbw`, SearXNG, `trafilatura`, `pandoc`,
-`poppler-utils`, `nvidia-smi`.
+`poppler-utils`, `nvidia-smi`, `agent-browser` and `chromium` (the last two
+come from the NixOS config).
 
 ## Development
 
