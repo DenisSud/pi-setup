@@ -12,29 +12,40 @@ One question at a time, each with a suggested answer.
 ## State
 
 - `~/Documents/Notes/personal/backlog.md` — week/month/year/someday tasks.
-- `~/Documents/Notes/personal/tracker.json` — habits, goals, review dates
-  (see the `tracker` skill).
+- Goals + this-week-next live in `backlog.md`. No habit tracker —
+  tracker.json and the dashboard were removed 2026-10-12 as ineffective.
 - `~/Documents/Notes/personal/daily-routine.md` — the day's shape.
 - `~/Documents/Notes/personal/briefs/` — the week's morning briefs (the planned
   side of the week).
-- Last week's calendar events via `calendar_list_events`.
-- Days since the last entry in `tracker.reviews`.
+- Last week's calendar events via `calendar_list_events` (the reliable record:
+  day-cards and blocks — briefs may be sparse, since Denis plans mornings
+  manually when the day is obvious).
 
 ## Steps
 
-1. **Load.** Pull the backlog, the tracker, and last week's calendar events.
-   Note the last review date. Done when you can name each active goal, the open
-   prep windows, and the week's fixed commitments.
+1. **Load.** Pull the backlog and last week's calendar events. Note the last
+   review date. Done when you can name each active goal, the open prep windows,
+   and the week's fixed commitments.
 
-2. **Reconcile the week.** Compare what was planned with what happened: tracker
-   flags, calendar blocks, backlog ticks, the week's briefs. Name each miss in
+2. **Reconcile the week.** Compare what was planned with what happened:
+   calendar blocks/day-cards, backlog ticks, briefs where they exist. Name each miss in
    one line — no ceremony, no blame. Return unfinished tasks to the week list.
 
-3. **Score the goals.** For every goal in the tracker: one line — *moved*,
+3. **Score the goals.** For every active goal: one line — *moved*,
    *stalled*, or *done*. For a stalled goal, propose the single next concrete
    step; for a dead one, propose killing it or parking it. Changing, killing,
-   or setting a goal is Denis's call; update `progress` and `next` after he
-   decides.
+   or setting a goal is Denis's call; record decisions as `this-week-next` per
+   goal in the backlog.
+
+   **Focus principles** (state each week, adjust Tuesday's yardstick from
+   them):
+   - The system is **goal-based with a flexible day-to-day schedule** — the
+     goal is the commitment; the day's shape is negotiable.
+   - Deep work runs as **sprints**: ~30 min focus + 5-min break; ~1.5 h
+     intellectual sprints with ~30 min between sprints; productivity-style
+     work can stretch toward ~4 h. No hard 3–4 h monoliths.
+   - Estimate travel and busywork (uni, doctors, errands, queues) at **2×**
+     the naive time when blocking a day.
 
 4. **Build next week.** Draft next week's list from the backlog horizons and
    the active prep windows. Respect the standing shape: deep academic blocks
@@ -61,16 +72,15 @@ One question at a time, each with a suggested answer.
 5. **Prune.** A task that has slipped 3+ days gets split or killed — propose
    which. Remove dead weight and tasks that stopped mattering.
 
-6. **Signals.** One compact readout, from the tracker: deep blocks, gym,
-   scroll cap, reviews completed, menial tasks the agent took over. Compare to
-   last week; flag the trend, not the absolute.
+6. **Pulse.** From the calendar record + Denis's answer: deep-work days, gym
+   sessions, planning mornings that held. Compare to last week; flag the
+   trend, not the absolute.
 
 7. **Upgrade proposals.** Anything repeated during the week is a candidate for
    the self-improvement ladder (task → skill → automation) — propose at most
    two, name the trigger and the payoff, and apply only what he approves.
 
-8. **Write.** Update the tracker (`reviews`, goals — the dashboard shows them
-   live; goals render as a plain list, no progress bars), populate next
-   month's planning event if this is the month's last Sunday, write the
-   backlog, and apply any approved task/skill changes. End with a one-line
+8. **Write.** Populate next month's planning event if this is the month's last
+   Sunday, write the backlog (incl. the scored goals' `this-week-next`), book
+   next week's all-day day-cards, and apply any approved task/skill changes. End with a one-line
    summary of the week and the first thing Monday should move.

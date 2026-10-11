@@ -22,8 +22,6 @@ one question at a time, each with a proposed answer, not a questionnaire.
   priority commitments, not preferences.
 - `~/Documents/Notes/personal/backlog.md` — week/month/year/someday tasks.
   Today lives on the calendar, not here.
-- `~/Documents/Notes/personal/tracker.json` — habits, goals, consistency data
-  (see the `tracker` skill).
 - `~/Documents/Notes/personal/academic-plan.md` — the till-September study
   strategy; the weekly/monthly layer decides what slice lands this week.
 - `~/Documents/Notes/personal/today.md` — the morning brief, the day in prose.
@@ -35,8 +33,7 @@ one question at a time, each with a proposed answer, not a questionnaire.
 
 ## Steps
 
-1. **Load.** Read the routine, the backlog, the tracker (active goals + recent
-   flags), and today's calendar events — including any **prep window**
+1. **Load.** Read the routine, the backlog, and today's calendar events — including any **prep window**
    (deadline track) covering today. Done when you can name every fixed
    commitment today, the anchors around them, and which deadline tracks are
    active.
@@ -49,12 +46,17 @@ one question at a time, each with a proposed answer, not a questionnaire.
 3. **Reconcile yesterday.** List yesterday's task and Productivity blocks — not
    routine blocks — and ask what actually got done. Return unfinished tasks to
    the backlog's week list. Confirm yesterday's tracker flags in the same
-   breath (wake, gym, deep block, scroll, wind-down, Tanya) — one compact
-   question, not one-by-one. Record the answers in the tracker.
+   breath — one compact
+   question, not one-by-one.
+
+   The system must survive without the agent: Denis plans mornings manually
+   when the day is obvious. If today's calendar/brief already exists, cut the
+   day-card as usual; if the plan was made by hand, reconcile against what is
+   on the calendar, do not re-plan from scratch.
 
 4. **Triage today.** Candidates are the week list plus anything an active prep
    window still needs — read the window's checklist and ask what is already
-   done. An active deadline track outranks backlog wants. Name each tracker
+   done. An active deadline track outranks backlog wants. Name each active
    goal in one line and whether today can move one. He picks; never silently
    take a task. Done when today's task list is agreed.
 
@@ -104,10 +106,6 @@ one question at a time, each with a proposed answer, not a questionnaire.
    - anything from the dump worth re-reading (links, addresses, numbers).
    Under ~40 lines, no filler. On a re-run, overwrite both files; the brief
    always matches the latest approved plan.
-
-10. **Track.** Mark today's `plan` flag in the tracker (see the `tracker`
-    skill). The dashboard at `http://localhost:8787` reflects it live — no
-    render step needed.
 
 ## Re-planning
 
