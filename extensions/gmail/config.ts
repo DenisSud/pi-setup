@@ -1,9 +1,9 @@
 /**
  * gmail/config — non-secret connection facts for the Gmail tools.
  *
- * The account password is never here: it is resolved at connect time through
- * the `security` extension's secrets profile named in `secretProfile`
- * (Bitwarden item `pi/Google-app-password`).
+ * The account password is never here: it is read at connect time from the
+ * process environment (the `pi-env` extension copies settings.json's "env"
+ * block into it), from the variable named in `passwordVar`.
  *
  * Config file: ~/.pi/agent/gmail.json (override with GMAIL_CONFIG).
  * Kept in the agent dir, never in the package: a git package is cleaned on
@@ -18,8 +18,8 @@ export interface GmailConfig {
 	username: string;
 	host: string;
 	port: number;
-	/** Secrets profile (security extension) holding the IMAP app password. */
-	secretProfile: string;
+	/** Env var holding the IMAP app password (pi-env). */
+	passwordVar: string;
 	/** Append-only audit log, trimmed to the last AUDIT_LIMIT entries. */
 	auditLog: string;
 	/** Body text cap per message (chars). */
@@ -35,7 +35,7 @@ export function configPath(): string {
 const DEFAULTS: Omit<GmailConfig, "username"> = {
 	host: "imap.gmail.com",
 	port: 993,
-	secretProfile: "gmail",
+	passwordVar: "GMAIL_APP_PASSWORD",
 	auditLog: join(os.homedir(), ".local", "state", "pi-personal", "gmail-audit.jsonl"),
 	maxBodyChars: 20_000,
 	attachmentDir: join(os.homedir(), "Downloads", "email-attachments"),
@@ -63,7 +63,7 @@ export function loadConfig(): GmailConfig {
 		username: str("username", ""),
 		host: str("host", DEFAULTS.host),
 		port: Number(raw.port ?? DEFAULTS.port),
-		secretProfile: str("secretProfile", DEFAULTS.secretProfile),
+		passwordVar: str("passwordVar", DEFAULTS.passwordVar),
 		auditLog: str("auditLog", DEFAULTS.auditLog),
 		maxBodyChars: Number(raw.maxBodyChars ?? DEFAULTS.maxBodyChars),
 		attachmentDir: str("attachmentDir", DEFAULTS.attachmentDir),

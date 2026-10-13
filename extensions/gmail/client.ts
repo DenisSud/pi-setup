@@ -7,8 +7,8 @@
  *   - message ids are Gmail's X-GM-MSGID (stable across folders and moves);
  *     thread ids are X-GM-THRID. ImapFlow maps both onto `emailId`/`threadId`.
  *   - every write goes through guard.ts (Drafts only)
- *   - credentials come from the security extension's secrets profiles, resolved
- *     at connect time and cached in memory only
+ *   - credentials are read from the process environment at connect time and
+ *     cached in memory only
  *
  * The IMAP client is created through `setImapFactory` so tests can drive the
  * tools against a fake server; production always uses the real ImapFlow.
@@ -17,8 +17,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { ImapFlow } from "imapflow";
-import { loadConfig as loadSecurityConfig } from "../security/config.ts";
-import { resolveProfile } from "../security/rbw.ts";
+import { requireEnvVars } from "../../lib/credentials.ts";
 import type { GmailConfig } from "./config.ts";
 import { loadConfig } from "./config.ts";
 import { audit, type MailboxKey, MAILBOX_FALLBACK, SPECIAL_USE } from "./guard.ts";
@@ -148,18 +147,8 @@ export function normalizeAppPassword(raw: string): string {
 async function credentials(config: GmailConfig): Promise<{ user: string; pass: string }> {
 	const current = state();
 	if (current.credentials) return current.credentials;
-	let env: Record<string, string>;
-	try {
-		env = await resolveProfile(loadSecurityConfig(), config.secretProfile);
-	} catch (err) {
-		throw new Error(
-			`gmail: cannot read secrets profile "${config.secretProfile}": ${(err as Error).message}. ` +
-				`Add the profile to ~/.pi/agent/security.json and run \`rbw unlock\`.`,
-		);
-	}
-	const raw = env.GMAIL_APP_PASSWORD ?? env.PASSWORD ?? Object.values(env)[0];
-	if (!raw) throw new Error(`gmail: secrets profile "${config.secretProfile}" resolved no password (expected GMAIL_APP_PASSWORD)`);
-	current.credentials = { user: config.username, pass: normalizeAppPassword(raw) };
+	const env = requireEnvVars([config.passwordVar], "gmail");
+	current.credentials = { user: config.username, pass: normalizeAppPassword(env[config.passwordVar]) };
 	return current.credentials;
 }
 
@@ -219,7 +208,8 @@ export async function getClient(): Promise<ImapClientLike> {
 			throw new Error(
 				`gmail: Gmail rejected the app password for ${config.username} (${detail.trim()}). ` +
 					"App passwords stop working when the Google account password changes or 2FA is reset: create a new one " +
-					"(Google Account → Security → 2-Step Verification → App passwords) and update the Bitwarden item `pi/Google-app-password`.",
+					"(Google Account → Security → 2-Step Verification → App passwords) and update GMAIL_APP_PASSWORD " +
+					'in settings.json\'s "env" block.',
 			);
 		}
 		throw err;

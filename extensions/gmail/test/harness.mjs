@@ -1,17 +1,17 @@
 /**
  * Harness tests for the gmail extension.
  *
- * Drives the registered tools directly against a stubbed ExtensionAPI, a fake
- * IMAP server (setImapFactory) and a stub `rbw` binary, so the whole path runs
- * — guard, id resolution, MIME decoding, drafts lifecycle, audit log — without
- * touching the network or the real vault.
+ * Drives the registered tools directly against a stubbed ExtensionAPI and a
+ * fake IMAP server (setImapFactory), so the whole path runs — guard, id
+ * resolution, MIME decoding, drafts lifecycle, audit log, credentials from the
+ * environment — without touching the network or a real account.
  *
- *   ./test/run.sh harness   fake IMAP + stub rbw (no network)
+ *   ./test/run.sh harness   fake IMAP (no network)
  *   ./test/run.sh live      real Gmail login, read-only checks
  *                           (GMAIL_LIVE_WRITE=1 adds the draft cycle)
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { ImapFlow } from "imapflow";
@@ -27,19 +27,11 @@ const CONFIG = join(TMP, "config.json");
 const AUDIT = join(TMP, "audit.jsonl");
 const ATTACHMENTS = join(TMP, "attachments");
 
-/** Stub rbw: prints one password for any item, so the security module is
- *  exercised for real (config parsing, execFile, env handoff). */
-function stubRbw() {
-	const path = join(TMP, "rbw");
-	writeFileSync(path, '#!/bin/sh\necho "${RBW_STUB_PASSWORD:-harness-app-password}"\n', { mode: 0o755 });
-	writeFileSync(
-		join(TMP, "security.json"),
-		JSON.stringify({
-			profiles: { gmail: { vars: { GMAIL_APP_PASSWORD: { item: "Test", field: "password", folder: "pi" } } } },
-			rbw: { command: path, timeoutMs: 5000 },
-		}),
-	);
-	process.env.PI_SECURITY_CONFIG = join(TMP, "security.json");
+/** Credentials come from the environment: pi-env fills GMAIL_APP_PASSWORD
+ *  from settings.json's "env" block in a real session; here it is set directly
+ *  per test. */
+function setAppPassword(value = "harness-app-password") {
+	process.env.GMAIL_APP_PASSWORD = value;
 }
 
 function writeConfig(extra = {}) {
@@ -50,7 +42,7 @@ function writeConfig(extra = {}) {
 }
 
 writeConfig();
-stubRbw();
+setAppPassword();
 process.env.GMAIL_CONFIG = CONFIG;
 rmSync(AUDIT, { force: true });
 
@@ -557,14 +549,28 @@ test("normalizeAppPassword: strips Google's display spaces", () => {
 
 test("credentials: a spaced app password reaches IMAP compacted", async () => {
 	await useServer();
-	process.env.RBW_STUB_PASSWORD = "abcd efgh ijkl mnop";
+	process.env.GMAIL_APP_PASSWORD = "abcd efgh ijkl mnop";
 	await resetState();
 	try {
 		const result = await runTool(tool("email_list_drafts"), {});
 		assert(!result.isError, result.content[0].text);
 		assertEqual(lastAuth, { user: "denis@example.com", pass: "abcdefghijklmnop" });
 	} finally {
-		delete process.env.RBW_STUB_PASSWORD;
+		setAppPassword();
+		await resetState();
+	}
+});
+
+test("credentials: a missing env var names the variable to set", async () => {
+	delete process.env.GMAIL_APP_PASSWORD;
+	await resetState();
+	try {
+		const result = await runTool(tool("email_list_drafts"), {});
+		assert(result.isError, "expected an error");
+		assert(result.content[0].text.includes("GMAIL_APP_PASSWORD"), result.content[0].text);
+		assert(result.content[0].text.includes("settings.json"), result.content[0].text);
+	} finally {
+		setAppPassword();
 		await resetState();
 	}
 });
@@ -578,13 +584,17 @@ test("timestamps are marked UTC", async () => {
 // ── live tests ────────────────────────────────────────────────────────────
 
 if (process.env.GMAIL_LIVE) {
-	// The mocked tests run with a fake IMAP server, a stub rbw and a temp
-	// config; the live tests swap all three back inside the test body so the
-	// harness tests keep their isolation.
+	// The mocked tests run with a fake IMAP server and a temp config; the live
+	// tests swap both back inside the test body so the harness tests keep their
+	// isolation. Credentials come from settings.json's "env" block — the same
+	// values pi-env loads in a real session.
 	const goLive = async () => {
 		setImapFactory((options) => new ImapFlow(options));
 		delete process.env.GMAIL_CONFIG;
-		delete process.env.PI_SECURITY_CONFIG;
+		const settings = join(homedir(), ".pi", "agent", "settings.json");
+		if (existsSync(settings)) {
+			Object.assign(process.env, JSON.parse(readFileSync(settings, "utf8")).env ?? {});
+		}
 		await resetState();
 	};
 

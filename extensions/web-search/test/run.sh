@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Test runner for the web-search extension (SearXNG + system extractors).
+# Test runner for the web-search extension (SearXNG search only).
 #
-#   ./test/run.sh harness   — functional tests (mocked fetch; real trafilatura/
-#                             pandoc/pdftotext — wrapped in a nix shell if not
-#                             installed system-wide, no network)
-#   ./test/run.sh live      — live test against the local SearXNG service and
-#                             a real page fetch (needs services.searx running)
+#   ./test/run.sh harness   — functional tests (mocked fetch, no network)
+#   ./test/run.sh live      — live test against the local SearXNG service
 #   ./test/run.sh           — both
 set -euo pipefail
 
@@ -26,24 +23,14 @@ setup_symlinks() {
   ln -sfn "$STORE/node_modules/typebox" "$EXT_DIR/node_modules/typebox"
 }
 
-# trafilatura/pdftotext are NixOS system packages; fall back to a nix shell
-# so the harness can run before the next nixos-rebuild.
-with_extractors() {
-  if command -v trafilatura >/dev/null 2>&1 && command -v pdftotext >/dev/null 2>&1; then
-    "$@"
-  else
-    nix shell nixpkgs#python3Packages.trafilatura nixpkgs#poppler-utils -c "$@"
-  fi
-}
-
 run_harness() {
   echo "== harness tests =="
-  with_extractors node "$HARNESS"
+  node "$HARNESS"
 }
 
 run_live() {
-  echo "== live test (local SearXNG + real fetch) =="
-  WEB_SEARCH_LIVE=1 with_extractors node "$HARNESS"
+  echo "== live test (local SearXNG) =="
+  WEB_SEARCH_LIVE=1 node "$HARNESS"
 }
 
 case "${1:-all}" in

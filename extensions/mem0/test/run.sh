@@ -2,7 +2,7 @@
 # Test runner for the mem0 extension.
 #
 #   ./test/run.sh harness   — functional tests (fake mem0/gate HTTP servers,
-#                             stubbed pi API, no network, no vault access)
+#                             stubbed pi API, no network, no credentials)
 set -euo pipefail
 
 EXT_DIR="$(cd "$(dirname "$0")/.." && pwd)"

@@ -247,8 +247,9 @@ class SelfHostedProvider implements Mem0Provider {
 export interface CreateProviderOptions {
   config: Mem0ExtensionConfig;
   /**
-   * Resolved API key (e.g. via a security profile). Takes precedence over
-   * config.apiKey, which itself may come from ${ENV} interpolation.
+   * Resolved API key (e.g. via apiKeyVar from the environment). Takes
+   * precedence over config.apiKey, which itself may come from ${ENV}
+   * interpolation.
    */
   apiKey?: string;
 }

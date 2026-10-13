@@ -1,16 +1,17 @@
 /**
  * Harness tests for the calendar extension.
  *
- * ICS parsing/building and the CalDAV operations run against a mocked fetch
- * and a stub `rbw` binary, so ETag preconditions, the expand fallback, the
- * delete snapshot and the credential path are all exercised offline.
+ * ICS parsing/building and the CalDAV operations run against a mocked fetch,
+ * so ETag preconditions, the expand fallback, the delete snapshot and the
+ * credential path are all exercised offline. Credentials are plain environment
+ * variables (pi-env in a real session).
  *
- *   ./test/run.sh harness   mocked fetch + stub rbw (no network)
+ *   ./test/run.sh harness   mocked fetch (no network)
  *   ./test/run.sh live      real CalDAV on cal.sudakov.site
  *                           (CALENDAR_LIVE_WRITE=1 adds the event cycle)
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { resetState } from "../caldav.ts";
 import { loadConfig } from "../config.ts";
@@ -39,28 +40,17 @@ writeFileSync(
 	JSON.stringify({
 		baseUrl: BASE,
 		collection: "/denis/main/",
-		secretProfile: "radicale-agent",
+		userVar: "RADICALE_AGENT_USER",
+		passwordVar: "RADICALE_AGENT_PASSWORD",
 		timezone: "Europe/Moscow",
 		auditLog: AUDIT,
 	}),
 );
-writeFileSync(join(TMP, "rbw"), "#!/bin/sh\necho harness-secret\n", { mode: 0o755 });
-writeFileSync(
-	join(TMP, "security.json"),
-	JSON.stringify({
-		profiles: {
-			"radicale-agent": {
-				vars: {
-					RADICALE_USER: { item: "Radicale agent", field: "username", folder: "pi" },
-					RADICALE_PASSWORD: { item: "Radicale agent", field: "password", folder: "pi" },
-				},
-			},
-		},
-		rbw: { command: join(TMP, "rbw"), timeoutMs: 5000 },
-	}),
-);
 process.env.CALENDAR_CONFIG = CONFIG;
-process.env.PI_SECURITY_CONFIG = join(TMP, "security.json");
+// Credentials come from the environment (pi-env fills these from settings.json
+// in a real session); here they are set directly.
+process.env.RADICALE_AGENT_USER = "harness-user";
+process.env.RADICALE_AGENT_PASSWORD = "harness-secret";
 
 // ── tiny test runner ──────────────────────────────────────────────────────
 
@@ -379,7 +369,7 @@ test("list: falls back to masters when the server refuses to expand", async () =
 	assert(result.content[0].text.includes("Weekly"), result.content[0].text);
 });
 
-test("get: reads the event by uid with credentials from the secrets profile", async () => {
+test("get: reads the event by uid with credentials from the environment", async () => {
 	mockFetch((request) => {
 		assertEqual(request.method, "GET");
 		assertEqual(request.url, `${BASE}/denis/main/event-1.ics`);
@@ -525,11 +515,26 @@ test("delete: snapshots the event into the audit log before deleting", async () 
 	assert(entry.ics.includes("SUMMARY:Cancel me"), entry.ics);
 });
 
-test("errors: 401 explains the credential path", async () => {
+test("errors: 401 is reported with the status", async () => {
 	mockFetch(() => new Response("unauthorized", { status: 401 }));
 	const result = await runTool(tool("calendar_get_event"), { uid: "event-6" });
 	assert(result.isError, "expected an error");
-	assert(result.content[0].text.includes("secrets profile"), result.content[0].text);
+	assert(result.content[0].text.includes("401"), result.content[0].text);
+});
+
+test("credentials: a missing env var names the variable to set", async () => {
+	const saved = process.env.RADICALE_AGENT_PASSWORD;
+	delete process.env.RADICALE_AGENT_PASSWORD;
+	resetState();
+	try {
+		const result = await runTool(tool("calendar_list_events"), {});
+		assert(result.isError, "expected an error");
+		assert(result.content[0].text.includes("RADICALE_AGENT_PASSWORD"), result.content[0].text);
+		assert(result.content[0].text.includes("settings.json"), result.content[0].text);
+	} finally {
+		if (saved !== undefined) process.env.RADICALE_AGENT_PASSWORD = saved;
+		resetState();
+	}
 });
 
 test("config: collection path is normalised", () => {
@@ -542,12 +547,16 @@ test("config: collection path is normalised", () => {
 // ── live tests ────────────────────────────────────────────────────────────
 
 if (process.env.CALENDAR_LIVE) {
-	// The mocked tests ran with a stub rbw and a cal.test config; drop both
-	// caches so the live tests talk to the real server with the real vault.
+	// The mocked tests ran with a cal.test config; drop it so the live tests
+	// talk to the real server. Credentials come from settings.json's "env"
+	// block — the same values pi-env loads in a real session.
 	const goLive = () => {
 		globalThis.fetch = REAL_FETCH;
 		delete process.env.CALENDAR_CONFIG;
-		delete process.env.PI_SECURITY_CONFIG;
+		const settings = join(homedir(), ".pi", "agent", "settings.json");
+		if (existsSync(settings)) {
+			Object.assign(process.env, JSON.parse(readFileSync(settings, "utf8")).env ?? {});
+		}
 		resetState();
 	};
 

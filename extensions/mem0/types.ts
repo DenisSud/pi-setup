@@ -60,11 +60,10 @@ export interface Mem0ExtensionConfig {
   /** API key sent as X-API-Key. Supports ${MEM0_API_KEY}. */
   apiKey?: string;
   /**
-   * Name of a `security` extension profile (security.json) providing the API
-   * key through rbw. Takes precedence over apiKey.
+   * Env var holding the API key, read from the process environment (the
+   * `pi-env` extension copies settings.json's "env" block into it). Takes
+   * precedence over apiKey. Default: "MEM0_ADMIN_API_KEY".
    */
-  apiKeyProfile?: string;
-  /** Env var name read from the profile's resolved vars. Default: "MEM0_ADMIN_API_KEY". */
   apiKeyVar?: string;
   /** Required self-hosted Mem0 server URL. */
   baseUrl?: string;

@@ -1,8 +1,9 @@
 /**
  * calendar/config — where the personal calendar lives and who talks to it.
  *
- * No credentials here: the CalDAV user/password come from the security
- * extension's secrets profile named in `secretProfile`.
+ * No credentials here: the CalDAV user/password are read from the process
+ * environment (the `pi-env` extension copies settings.json's "env" block into
+ * it). The variable names are configurable via `userVar` / `passwordVar`.
  *
  * Config file: ~/.pi/agent/calendar.json (override with CALENDAR_CONFIG).
  * Kept in the agent dir, never in the package: a git package is cleaned on
@@ -17,8 +18,10 @@ export interface CalendarConfig {
 	baseUrl: string;
 	/** Calendar collection path, with leading and trailing slash. */
 	collection: string;
-	/** Secrets profile holding RADICALE_USER / RADICALE_PASSWORD. */
-	secretProfile: string;
+	/** Env var holding the CalDAV user (pi-env). */
+	userVar: string;
+	/** Env var holding the CalDAV password (pi-env). */
+	passwordVar: string;
 	/** Timezone used for local input times and for display. */
 	timezone: string;
 	auditLog: string;
@@ -31,7 +34,8 @@ export function configPath(): string {
 const DEFAULTS: CalendarConfig = {
 	baseUrl: "https://cal.sudakov.site",
 	collection: "/denis/main/",
-	secretProfile: "radicale-agent",
+	userVar: "RADICALE_AGENT_USER",
+	passwordVar: "RADICALE_AGENT_PASSWORD",
 	timezone: "Europe/Moscow",
 	auditLog: join(os.homedir(), ".local", "state", "pi-personal", "calendar-audit.jsonl"),
 };
@@ -57,7 +61,8 @@ export function loadConfig(): CalendarConfig {
 	return {
 		baseUrl: str("baseUrl").replace(/\/+$/, ""),
 		collection,
-		secretProfile: str("secretProfile"),
+		userVar: str("userVar"),
+		passwordVar: str("passwordVar"),
 		timezone: str("timezone"),
 		auditLog: str("auditLog"),
 	};

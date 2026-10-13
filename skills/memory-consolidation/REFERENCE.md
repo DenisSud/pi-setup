@@ -2,7 +2,7 @@
 
 ## Store API (personal scope `denis`)
 
-- Base `https://memory.sudakov.site`; auth header `X-API-Key: $MEM0_PI_KEY` (secrets profile `mem0`; never echo the key).
+- Base `https://memory.sudakov.site`; auth header `X-API-Key: $MEM0_PI_KEY` (env var from settings.json's `env` block, loaded by pi-env; never echo the key).
 - List: `GET /memories?user_id=denis&top_k=10000` → `{"results":[{"id","memory","created_at",…}]}`. Server cap is `ALL_MEMORIES_LIMIT` (10,000; over-limit → 422). The `mem0_memory` tool truncates — use curl or python for full listings.
 - Write: `POST /memories` `{"messages":[{"role":"user","content":"<fact>"}],"user_id":"denis","infer":false}` — stores verbatim, no inference.
 - Update: `PUT /memories/{id}` `{"text":"<fact>"}`. Delete: `DELETE /memories/{id}`.

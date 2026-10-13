@@ -36,20 +36,25 @@ pi config
 
 | extension | what it does |
 |---|---|
-| `security` | Bitwarden (`rbw`) secrets profiles, output redaction, credential-store guard |
-| `web-search` | `web_search` (SearXNG) + `web_fetch` (trafilatura/pandoc, pdftotext) |
+| `web-search` | `web_search` (SearXNG) — source discovery only; reading pages is curl or the `agent-browser` skill |
 | `mem0` | semantic memory: auto-recall + batched auto-capture + `mem0_memory` tool |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 
-`security` and `mem0` share `~/.pi/agent/security.json`. No ptc; no systemone
-(the guard was retired, mem0 speaks pi's native System One endpoint directly).
+Credentials are plain environment variables: `calendar`, `gmail` and `mem0`
+read them from `process.env`, and the third-party `pi-env` extension
+(`npm:pi-env`, in `settings.json`'s `packages`) loads them from the `env` block
+of `~/.pi/agent/settings.json` at startup. One machine-local file, no vault and
+no prompt — the trade-off is that any process running as the same user can read
+those values. No ptc; no systemone (mem0 speaks pi's native System One endpoint
+directly).
 
 ### Lib
 
 | file | what it does |
 |---|---|
 | `lib/audit.ts` | append-only JSONL audit log (ring buffer) shared by calendar + gmail |
+| `lib/credentials.ts` | read required env vars, with an error that names the missing one |
 
 ### Skills
 
@@ -69,14 +74,15 @@ cleaned on update. Per-device config lives in the agent dir:
 
 | file | for |
 |---|---|
-| `~/.pi/agent/security.json` | secrets profiles |
+| `~/.pi/agent/settings.json` | machine settings **and the `env` block with all credentials** (mode 600) |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
 | `~/.pi/agent/decision.json` | **retired** — safe to delete |
 
-System dependencies (not npm): `rbw`, SearXNG, `trafilatura`, `pandoc`,
-`poppler-utils`, `nvidia-smi`, `agent-browser` and `chromium` (the last two
-come from the NixOS config).
+System dependencies (not npm): SearXNG, `nvidia-smi`, `agent-browser` and
+`chromium` (the last two come from the NixOS config). `rbw`, `trafilatura`,
+`pandoc` and `poppler-utils` were only needed by the retired secrets profiles
+and `web_fetch` tool.
 
 ## Development
 
@@ -86,4 +92,6 @@ Each extension carries its own harness:
 extensions/<name>/test/run.sh harness
 ```
 
-The harnesses stub the pi API and the network; no vault access.
+The harnesses stub the pi API and the network — no credentials, no network.
+The `live` variant of each reads the `env` block of `~/.pi/agent/settings.json`
+the same way `pi-env` does in a session.

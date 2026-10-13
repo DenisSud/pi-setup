@@ -1,26 +1,20 @@
 /**
- * Harness tests for the web-search extension (SearXNG + system extractors).
+ * Harness tests for the web-search extension (SearXNG).
  *
- * Drives the registered tools directly against a stubbed ExtensionAPI and a
- * mocked globalThis.fetch. The extraction tests run the REAL trafilatura /
- * pandoc / pdftotext binaries (run.sh wraps node in a nix shell when they are
- * not on PATH) — PATH is manipulated per test to force each branch.
+ * Drives the registered tool directly against a stubbed ExtensionAPI and a
+ * mocked globalThis.fetch. No network, no system extractors.
  *
  * Tests:
- *   - tools registered
+ *   - tool registered, and nothing else (reading pages is not this extension's job)
  *   - search success / max_results clamp / time_range / empty / API error /
  *     unreachable / abort
- *   - HTML extraction (trafilatura), pandoc fallback, missing-extractor error
- *   - PDF extraction (pdftotext)
- *   - text/plain passthrough + truncation, unsupported content type
- *   - live (WEB_SEARCH_LIVE=1): real local SearXNG search + real page fetch
+ *   - live (WEB_SEARCH_LIVE=1): real local SearXNG search
  *
  * Run: ./test/run.sh harness      (no network)
  *      ./test/run.sh live         (needs the local SearXNG service)
  */
 
-import { existsSync, mkdtempSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import createExtension from "../index.ts";
 
@@ -88,13 +82,6 @@ async function runTool(tool, params, { signal } = {}) {
 
 // ── fixtures ──────────────────────────────────────────────────────────────
 
-const ARTICLE_HTML = `<!doctype html><html><head><title>Test Article</title></head>
-<body><header><nav>Home About Contact</nav></header>
-<article><h1>Test Article</h1>
-<p>SearXNG is a free internet metasearch engine which aggregates results from various search services and databases.</p>
-<p>Agents retrieve apples from the orchard every autumn, and the distinctive sentence about zebras is written here so the test can find it.</p>
-</article><footer>Copyright 2026</footer></body></html>`;
-
 const SEARX_RESPONSE = {
 	results: [
 		{ title: "First", url: "https://example.com/1", content: "First content", engine: "google cse" },
@@ -117,38 +104,15 @@ function makeResponse({ url = "https://example.com/page", body = "", contentType
 	};
 }
 
-/** Minimal one-page PDF with a Helvetica text line. */
-function makePdf(text) {
-	const objects = {
-		1: "<< /Type /Catalog /Pages 2 0 R >>",
-		2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		3: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-		4: `<< /Length ${`BT /F1 18 Tf 72 720 Td (${text}) Tj ET`.length} >>\nstream\nBT /F1 18 Tf 72 720 Td (${text}) Tj ET\nendstream`,
-		5: "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-	};
-	let pdf = "%PDF-1.4\n";
-	const offsets = {};
-	for (let i = 1; i <= 5; i++) {
-		offsets[i] = pdf.length;
-		pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
-	}
-	const xref = pdf.length;
-	pdf += "xref\n0 6\n0000000000 65535 f \n";
-	for (let i = 1; i <= 5; i++) pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-	pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-	return Buffer.from(pdf, "latin1");
-}
-
 // ── registration ──────────────────────────────────────────────────────────
 
 const pi = makePi();
 createExtension(pi);
 const search = pi.tools.get("web_search");
-const fetchTool = pi.tools.get("web_fetch");
 
-test("registers web_search and web_fetch", () => {
+test("registers web_search and nothing else", () => {
 	assert(search, "web_search tool registered");
-	assert(fetchTool, "web_fetch tool registered");
+	assert(pi.tools.size === 1, `only one tool registered: ${[...pi.tools.keys()].join(", ")}`);
 });
 
 // ── web_search ────────────────────────────────────────────────────────────
@@ -197,6 +161,18 @@ test("search empty results → No results found.", async () => {
 	assert(result.content[0].text === "No results found.", `text: ${result.content[0].text}`);
 });
 
+test("search results without a url are dropped", async () => {
+	mockFetch(async () =>
+		makeResponse({
+			body: JSON.stringify({ results: [{ title: "No URL", content: "x" }, { title: "Kept", url: "https://example.com/k", content: "y" }] }),
+			contentType: "application/json",
+		}),
+	);
+	const result = await runTool(search, { query: "x" });
+	assert(result.details.resultCount === 1, `count: ${result.details.resultCount}`);
+	assert(result.details.results[0].title === "Kept", "kept the one with a url");
+});
+
 test("search API error → status in clean error", async () => {
 	mockFetch(async () => makeResponse({ body: "boom", contentType: "text/plain", status: 503 }));
 	const result = await runTool(search, { query: "x" });
@@ -214,6 +190,13 @@ test("search unreachable → SearXNG setup hint", async () => {
 	assert(/web-search\.nix/.test(result.content[0].text), "points at the nixos module");
 });
 
+test("search invalid JSON → clean error", async () => {
+	mockFetch(async () => makeResponse({ body: "<html>not json</html>", contentType: "application/json" }));
+	const result = await runTool(search, { query: "x" });
+	assert(result.isError === true, "isError");
+	assert(/invalid JSON/.test(result.content[0].text), `message: ${result.content[0].text}`);
+});
+
 test("search abort → aborted error", async () => {
 	const controller = new AbortController();
 	controller.abort();
@@ -225,77 +208,10 @@ test("search abort → aborted error", async () => {
 	assert(/aborted/.test(result.content[0].text), `message: ${result.content[0].text}`);
 });
 
-// ── web_fetch: HTML ───────────────────────────────────────────────────────
-
-test("fetch HTML → trafilatura markdown extraction", async () => {
-	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
-	const result = await runTool(fetchTool, { url: "https://example.com/article" });
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(result.details.method === "trafilatura", `method: ${result.details.method}`);
-	assert(result.details.title === "Test Article", `title: ${result.details.title}`);
-	assert(result.details.content.includes("distinctive sentence about zebras"), "article body extracted");
-	assert(!result.details.content.includes("Home About Contact"), "nav stripped");
-	assert(result.content[0].text.startsWith("Title: Test Article"), "formatted text");
-});
-
-test("fetch HTML → pandoc fallback when trafilatura is unavailable", async () => {
-	const pandocPath = which("pandoc");
-	assert(pandocPath, "pandoc must be on PATH for the fallback test");
-	const dir = mkdtempSync(join(tmpdir(), "pi-web-search-bin-"));
-	symlinkSync(pandocPath, join(dir, "pandoc"));
-	process.env.PATH = dir;
-	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
-	const result = await runTool(fetchTool, { url: "https://example.com/article" });
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(result.details.method === "pandoc", `method: ${result.details.method}`);
-	assert(/zebras/.test(result.details.content), "pandoc content present");
-});
-
-test("fetch HTML → missing extractors give an actionable error", async () => {
-	process.env.PATH = "/nonexistent";
-	mockFetch(async () => makeResponse({ body: ARTICLE_HTML }));
-	const result = await runTool(fetchTool, { url: "https://example.com/article" });
-	assert(result.isError === true, "isError");
-	assert(/not installed|no extractable content/.test(result.content[0].text), `message: ${result.content[0].text}`);
-});
-
-// ── web_fetch: PDF + plain text ───────────────────────────────────────────
-
-test("fetch PDF → pdftotext extraction", async () => {
-	mockFetch(async () =>
-		makeResponse({
-			url: "https://example.com/paper.pdf",
-			body: makePdf("PDF fixture sentence about zebras."),
-			contentType: "application/pdf",
-		}),
-	);
-	const result = await runTool(fetchTool, { url: "https://example.com/paper.pdf" });
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(result.details.method === "pdftotext", `method: ${result.details.method}`);
-	assert(/zebras/.test(result.details.content), `content: ${result.details.content}`);
-});
-
-test("fetch text/plain → passthrough with truncation cap", async () => {
-	mockFetch(async () => makeResponse({ url: "https://example.com/big.txt", body: "a".repeat(130_000), contentType: "text/plain" }));
-	const result = await runTool(fetchTool, { url: "https://example.com/big.txt" });
-	assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-	assert(result.details.method === "text", `method: ${result.details.method}`);
-	assert(result.details.truncated === true, "truncated flag");
-	assert(result.details.content.endsWith("[truncated at 120000 chars]"), "truncation marker");
-});
-
-test("fetch unsupported content type → clean error", async () => {
-	mockFetch(async () => makeResponse({ body: "binary", contentType: "application/octet-stream" }));
-	const result = await runTool(fetchTool, { url: "https://example.com/blob" });
-	assert(result.isError === true, "isError");
-	assert(/unsupported content type/.test(result.content[0].text), `message: ${result.content[0].text}`);
-});
-
-test("fetch HTTP error status → clean error", async () => {
-	mockFetch(async () => makeResponse({ status: 404 }));
-	const result = await runTool(fetchTool, { url: "https://example.com/missing" });
-	assert(result.isError === true, "isError");
-	assert(/404/.test(result.content[0].text), `message: ${result.content[0].text}`);
+test("search concurrency gate: 4 parallel searches still return", async () => {
+	mockFetch(async () => makeResponse({ body: JSON.stringify(SEARX_RESPONSE), contentType: "application/json" }));
+	const results = await Promise.all(Array.from({ length: 4 }, (_, i) => runTool(search, { query: `q${i}` })));
+	assert(results.every((r) => r.details.resultCount === 2), "all four resolved");
 });
 
 // ── live test (opt-in, needs the local SearXNG service) ───────────────────
@@ -306,11 +222,6 @@ if (process.env.WEB_SEARCH_LIVE === "1") {
 		const result = await runTool(search, { query: "python typing module", max_results: 3 });
 		assert(result.isError !== true, `not an error: ${result.content[0].text}`);
 		assert(result.details.resultCount > 0, `got results: ${result.content[0].text.slice(0, 200)}`);
-	});
-	test("live: real page fetch", async () => {
-		const result = await runTool(fetchTool, { url: "https://example.com/" });
-		assert(result.isError !== true, `not an error: ${result.content[0].text}`);
-		assert(result.details.content.includes("documentation examples"), `content: ${result.details.content.slice(0, 200)}`);
 	});
 }
 

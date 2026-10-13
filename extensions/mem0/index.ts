@@ -24,16 +24,14 @@
  * ("${ENV_VAR}" and "${ENV_VAR:-fallback}" interpolation supported), with
  * environment fallbacks for deployments without per-agent settings:
  * MEM0_BASE_URL, MEM0_API_KEY, MEM0_GATE_BASE_URL, MEM0_GATE_MODEL. The API
- * key can come from a `security` extension profile (apiKeyProfile), so the
- * credential never touches settings.json or the environment.
+ * key can be read from an environment variable (apiKeyVar) that `pi-env`
+ * loads from settings.json.
  */
 
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { loadConfig as loadSecurityConfig } from '../security/config.ts';
-import { resolveProfile } from '../security/rbw.ts';
 import { Capture, resolveCaptureConfig, type CaptureConfig } from './capture.ts';
 import { dedupProviderMemories } from './dedup.ts';
 import { Prefetch } from './prefetch.ts';
@@ -126,24 +124,20 @@ function loadConfig(): Mem0ExtensionConfig {
   return config;
 }
 
-let cachedApiKey: { profile: string; varName: string; value: string } | undefined;
+let cachedApiKey: { varName: string; value: string } | undefined;
 
 /**
- * Resolve the API key through the security extension's rbw machinery
- * (security.json profile named by config.apiKeyProfile). Cached per process;
+ * Resolve the API key from the environment variable named by config.apiKeyVar,
+ * which `pi-env` fills from settings.json's "env" block. Cached per process;
  * the value stays in memory only.
  */
 async function resolveApiKey(config: Mem0ExtensionConfig): Promise<string | undefined> {
-  const profile = config.apiKeyProfile?.trim();
-  if (!profile) return undefined;
-  const varName = config.apiKeyVar?.trim() || 'MEM0_ADMIN_API_KEY';
-  if (cachedApiKey?.profile === profile && cachedApiKey.varName === varName) {
-    return cachedApiKey.value;
-  }
-  const env = await resolveProfile(loadSecurityConfig(), profile);
-  const value = env[varName]?.trim();
-  if (!value) throw new Error(`Security profile "${profile}" did not provide ${varName}.`);
-  cachedApiKey = { profile, varName, value };
+  const varName = config.apiKeyVar?.trim();
+  if (!varName) return undefined;
+  if (cachedApiKey?.varName === varName) return cachedApiKey.value;
+  const value = process.env[varName]?.trim();
+  if (!value) throw new Error(`${varName} is not set — add it to settings.json's "env" block (pi-env).`);
+  cachedApiKey = { varName, value };
   return value;
 }
 
@@ -247,7 +241,7 @@ export default function mem0Extension(pi: ExtensionAPI): void {
       const resolvedApiKey = await resolveApiKey(config);
       if (!resolvedApiKey && !config.apiKey?.trim()) {
         throw new Error(
-          'Mem0 needs an API key: set apiKeyProfile (rbw) or apiKey / MEM0_API_KEY.',
+          'Mem0 needs an API key: set apiKeyVar (pi-env) or apiKey / MEM0_API_KEY.',
         );
       }
       const newProvider = await createMem0Provider({

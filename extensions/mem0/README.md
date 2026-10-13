@@ -34,9 +34,8 @@ deployments without per-agent settings (the fleet container).
 | setting | env | default | meaning |
 |---|---|---|---|
 | `baseUrl` | `MEM0_BASE_URL` | — | server URL; required |
-| `apiKey` | `MEM0_API_KEY` | — | consumer key; required unless `apiKeyProfile` resolves one |
-| `apiKeyProfile` | — | — | `security` extension profile (rbw) providing the key |
-| `apiKeyVar` | — | `MEM0_ADMIN_API_KEY` | var read from that profile |
+| `apiKey` | `MEM0_API_KEY` | — | consumer key; required unless `apiKeyVar` resolves one |
+| `apiKeyVar` | — | — | env var holding the key (pi-env loads it from settings.json's `env`) |
 | `memoryMode` | — | `hybrid` | `hybrid` / `active` / `passive` preset |
 | `autoCapture` / `autoRecall` / `toolEnabled` | — | preset | independent overrides |
 | `userId` | — | `bot:<PI_BOT_NAME>` or `$USER` | namespace |

@@ -10,8 +10,7 @@
  * to unexpanded masters (RRULE pass-through) if the server refuses.
  */
 import { randomUUID } from "node:crypto";
-import { loadConfig as loadSecurityConfig } from "../security/config.ts";
-import { resolveProfile } from "../security/rbw.ts";
+import { requireEnvVars } from "../../lib/credentials.ts";
 import { createAuditLog } from "../../lib/audit.ts";
 import { type CalendarConfig, loadConfig } from "./config.ts";
 import { buildEvent, caldavStamp, parseEvents, parseInstant, toDateOnly, unfoldLines } from "./ics.ts";
@@ -46,19 +45,8 @@ async function authorization(): Promise<string> {
 	const current = state();
 	if (current.auth) return current.auth;
 	const config = calendarConfig();
-	let env: Record<string, string>;
-	try {
-		env = await resolveProfile(loadSecurityConfig(), config.secretProfile);
-	} catch (err) {
-		throw new Error(
-			`calendar: cannot read secrets profile "${config.secretProfile}": ${(err as Error).message}. ` +
-				`Add the profile to ~/.pi/agent/security.json and run \`rbw unlock\`.`,
-		);
-	}
-	const user = env.RADICALE_USER;
-	const pass = env.RADICALE_PASSWORD;
-	if (!user || !pass) throw new Error(`calendar: secrets profile "${config.secretProfile}" must define RADICALE_USER and RADICALE_PASSWORD`);
-	current.auth = `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
+	const env = requireEnvVars([config.userVar, config.passwordVar], "calendar");
+	current.auth = `Basic ${Buffer.from(`${env[config.userVar]}:${env[config.passwordVar]}`).toString("base64")}`;
 	return current.auth;
 }
 
@@ -96,7 +84,7 @@ function unquote(etag: string | null | undefined): string | undefined {
 async function failure(response: Response, action: string): Promise<Error> {
 	const text = (await response.text().catch(() => "")).slice(0, 300).replace(/\s+/g, " ").trim();
 	const hints: Record<number, string> = {
-		401: "check the secrets profile and the Radicale htpasswd entry",
+		401: "check the CalDAV credentials in settings.json's \"env\" block (userVar / passwordVar) and the Radicale htpasswd entry",
 		403: "the user is authenticated but not allowed here (Radicale rights file)",
 		404: "the calendar collection may not exist yet",
 		412: "someone else changed the event since it was read (ETag mismatch)",

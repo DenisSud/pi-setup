@@ -3,7 +3,7 @@
 #
 #   ./test/run.sh harness   — tool tests against a fake IMAP server (no network)
 #   ./test/run.sh live      — real Gmail login + read-only checks
-#                             (needs the `gmail` secrets profile unlocked)
+#                             (needs GMAIL_APP_PASSWORD in settings.json's "env")
 #   ./test/run.sh           — both
 #
 # Live write checks (create/update/delete a draft) only run with
