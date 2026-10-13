@@ -1,8 +1,8 @@
 # pi-setup
 
-Denis's personal [pi](https://pi.dev) package: the extensions and skills the
-personal agent loads, on every device. Install it once per agent dir; the
-content syncs through git, the machine-local settings do not.
+Denis's personal [pi](https://pi.dev) package: the extensions, shared lib and
+skills the personal agent loads, on every device. Install it once per agent dir;
+the code syncs through git, the machine-local config does not.
 
 ## Install
 
@@ -30,6 +30,9 @@ Enable or disable individual resources with the native TUI:
 pi config
 ```
 
+Agents editing this repo: read [AGENTS.md](AGENTS.md) first — the checkout is a
+cache of `origin/main` and pi deletes anything not pushed.
+
 ## Contents
 
 ### Extensions
@@ -42,13 +45,6 @@ pi config
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 
-Each extension keeps its own config file in the agent dir, never a key in
-`settings.json` and never in the package. Credentials are plain environment
-variables: `env` puts them in `process.env` from `~/.pi/agent/env.json`, and
-`calendar`, `gmail` and `mem0` read them from there. No vault, no prompt — the
-trade-off is that any process running as the same user can read those values.
-No ptc; no systemone (mem0 speaks pi's native System One endpoint directly).
-
 ### Lib
 
 | file | what it does |
@@ -58,42 +54,57 @@ No ptc; no systemone (mem0 speaks pi's native System One endpoint directly).
 
 ### Skills
 
-- **engineering:** code-review, diagnosing-bugs, domain-modeling, implement,
-  implement-spec, pr, prototype, retro, to-spec, to-tickets, triage, wayfinder,
-  wizard
-- **productivity:** daily-planning, teach, tracker, wait-what, weekly-review,
-  writing-for-agents
-- **core:** grilling, handoff, self-improvement, show-me, skill-authoring
-- **tools:** agent-browser (browser automation CLI; the skill points at
-  `agent-browser skills get core` so it stays version-matched)
+`skills/` holds the skills the agent discovers: `engineering/`, `productivity/`,
+and tool skills at the top level (`agent-browser`, `memory-consolidation`, …).
+Each skill is a directory with a `SKILL.md` whose frontmatter decides when it
+fires.
 
-## Machine-local config
+## Conventions
 
-Nothing here reads config from the package directory — a git package is
-cleaned on update. Per-device config lives in the agent dir:
+- **One config file per extension**, in the agent dir: `env.json`, `mem0.json`,
+  `gmail.json`, `calendar.json`. Extensions never add keys to `settings.json`;
+  `auth.json` belongs to pi's providers. Details:
+  [docs/configuration.md](docs/configuration.md).
+- **Credentials are plain environment variables** in `~/.pi/agent/env.json`
+  (mode 600), loaded by the `env` extension. No vault, no unlock prompt — the
+  trade-off and its history: [docs/design-notes.md](docs/design-notes.md).
+- **Extensions stay independent**; shared code lives in `lib/`.
+
+## Machine-local files
 
 | file | for |
 |---|---|
-| `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; override path with `PI_ENV_CONFIG`) |
+| `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; path override `PI_ENV_CONFIG`) |
 | `~/.pi/agent/mem0.json` | mem0 server URL, `apiKeyVar`, namespace, capture/recall knobs |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
-| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages. Extensions do not add keys here. |
-| `~/.pi/agent/decision.json` | **retired** — safe to delete |
+| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages |
+| `~/.pi/agent/security.json.retired` | the old vault mapping (variable → Bitwarden item); safe to delete |
 
-System dependencies (not npm): SearXNG, `nvidia-smi`, `agent-browser` and
-`chromium` (the last two come from the NixOS config). `rbw`, `trafilatura`,
-`pandoc` and `poppler-utils` were only needed by the retired secrets profiles
-and `web_fetch` tool.
+Per-device files are not in git. On a new machine, copy them over.
 
 ## Development
 
-Each extension carries its own harness:
-
 ```sh
-extensions/<name>/test/run.sh harness
+extensions/<name>/test/run.sh harness    # mocked, no network, no credentials
+extensions/<name>/test/run.sh live       # real server; needs env.json
 ```
 
-The harnesses stub the pi API and the network — no credentials, no network.
-The `live` variant of each reads the `env` block of `~/.pi/agent/settings.json`
-the same way the `env` extension does in a session.
+[docs/development.md](docs/development.md) covers the harness/live split, the
+package-refresh behaviour, and how to add an extension.
+
+## Troubleshooting
+
+| symptom | cause and fix |
+|---|---|
+| `X not set — add it to ~/.pi/agent/env.json` | variable missing from `env.json`; add it, then `/reload` |
+| `Mem0 init failed: … invalid JSON` | `mem0.json` is malformed; fix it, then `/reload` |
+| `web_search: cannot reach SearXNG` | the local SearXNG service is down (`services.searx`) |
+| a skill or edit disappeared from this checkout | the package refresh reset it; see [AGENTS.md](AGENTS.md) — commit and push |
+| `rbw` fails with `Inappropriate ioctl for device` | nothing in this package uses it any more; the diagnosis is in [docs/design-notes.md](docs/design-notes.md) |
+
+## System dependencies
+
+Not npm: SearXNG, `nvidia-smi`, and `agent-browser` + `chromium` from the NixOS
+config. `rbw`, `trafilatura`, `pandoc` and `poppler-utils` were only needed by
+the retired vault scripts and `web_fetch` tool.

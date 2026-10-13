@@ -1,6 +1,6 @@
 ---
 name: agent-browser
-description: Drive a real browser from the terminal — the way to read a page that plain curl cannot. Use when a page needs JavaScript to render (curl returns an empty shell), when the task needs interaction (clicking, filling forms, logging in, downloading), or when you need screenshots, accessibility/DOM inspection, console or network capture, or to test a web app. Complements web_search (source discovery) and curl (static HTML/JSON): reach for the browser when the page must actually run or be driven.
+description: Drive a real browser from the terminal — the way to read a page that plain curl cannot. Use when a page needs JavaScript to render (curl returns an empty shell), when the task needs interaction (clicking, filling forms, logging in, downloading), or when you need screenshots, accessibility/DOM inspection, console or network capture, or to test a web app. Complements web_search (source discovery) and curl (static HTML/JSON) — reach for the browser when the page must actually run or be driven.
 ---
 
 # agent-browser

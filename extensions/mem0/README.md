@@ -48,7 +48,7 @@ deployments without per-agent config files (the fleet container).
 | `capture.flushIdleMs` | — | `180000` | flush this long after the last append |
 | `capture.capMessages` | — | `64` | hard buffer cap |
 | `capture.gate.*` | `MEM0_GATE_BASE_URL`, `MEM0_GATE_MODEL` | on when a URL is set | decision gate before capture |
-| `autoCapture` (env form) | `MEM0_AUTO_CAPTURE` | — | `true`/`false` wins over settings (bulk runs) |
+| `autoCapture` (env form) | `MEM0_AUTO_CAPTURE` | — | `true`/`false` wins over mem0.json (bulk runs) |
 
 ## Status (2026-10-02)
 
@@ -77,4 +77,4 @@ back full.
 ## Tests
 
 `./test/run.sh harness` — fake HTTP servers and a stubbed pi API, no network,
-no vault. Requires the installed `pi` store (symlinks set up by the script).
+no credentials. Requires the installed `pi` store (symlinks set up by the script).

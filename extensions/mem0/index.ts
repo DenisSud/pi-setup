@@ -18,7 +18,7 @@
  * as a custom message (delivered to the model on the user channel, never the
  * system prompt) and wrapped as untrusted data. Active side: the mem0_memory
  * tool lets the agent search, add, list, and delete memories on its own
- * initiative, under the same redaction and untrusted-data boundaries.
+ * initiative, with the same untrusted-data wrapping as recall.
  *
  * Configuration via mem0.json in the agent dir ("${ENV_VAR}" and
  * "${ENV_VAR:-fallback}" interpolation supported), with environment fallbacks
