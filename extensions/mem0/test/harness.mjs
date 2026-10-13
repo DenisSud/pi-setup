@@ -2,7 +2,7 @@
  * Harness tests for the mem0 extension.
  *
  * Drives the real modules with fake mem0 / gate HTTP servers and a stubbed pi
- * API — no network, no vault access, no real secrets.
+ * API — no network, no credentials, no real secrets.
  *
  * Tests:
  *   - privacy: redaction, untrusted wrapping, injection scan, namespace scope
@@ -12,7 +12,7 @@
  *   - prefetch: formatted recall, timeout
  *   - dedup: exact duplicates, dry-run, approval, invalid IDs
  *   - tools: gating, actions, formatting
- *   - index: session wiring end to end (env config → batched add)
+ *   - index: session wiring end to end (mem0.json + env config → batched add)
  *
  * Run: node test/harness.mjs   (Node >= 23.6, native TS type stripping)
  * Requires node_modules symlinks set up by run.sh.
@@ -705,7 +705,7 @@ function makeCtx() {
 test("index: env config drives a full capture cycle", async () => {
 	const mem0 = await startMem0();
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mem0-harness-"));
-	fs.writeFileSync(path.join(dir, "settings.json"), "{}");
+	fs.writeFileSync(path.join(dir, "mem0.json"), "{}");
 	const saved = {};
 	for (const key of ["PI_CODING_AGENT_DIR", "PI_BOT_NAME", "MEM0_BASE_URL", "MEM0_API_KEY", "MEM0_GATE_BASE_URL", "MEM0_GATE_MODEL"]) {
 		saved[key] = process.env[key];
@@ -746,6 +746,77 @@ test("index: env config drives a full capture cycle", async () => {
 	}
 });
 
+test("index: mem0.json drives config, env fills the api key", async () => {
+	const mem0 = await startMem0();
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mem0-harness-"));
+	fs.writeFileSync(
+		path.join(dir, "mem0.json"),
+		JSON.stringify({
+			baseUrl: mem0.url,
+			apiKeyVar: "MEM0_TEST_KEY",
+			userId: "denis",
+			userIdScope: "exact",
+			memoryMode: "hybrid",
+		}),
+	);
+	const saved = {};
+	for (const key of ["PI_CODING_AGENT_DIR", "MEM0_BASE_URL", "MEM0_API_KEY", "MEM0_TEST_KEY", "MEM0_GATE_BASE_URL", "MEM0_GATE_MODEL"]) {
+		saved[key] = process.env[key];
+	}
+	process.env.PI_CODING_AGENT_DIR = dir;
+	// No env fallbacks: everything must come from mem0.json except the key.
+	delete process.env.MEM0_BASE_URL;
+	delete process.env.MEM0_API_KEY;
+	delete process.env.MEM0_GATE_BASE_URL;
+	delete process.env.MEM0_GATE_MODEL;
+	process.env.MEM0_TEST_KEY = "file-key";
+	try {
+		const { api, handlers, tools } = makeApi();
+		mem0Extension(api);
+		const { ctx, statuses } = makeCtx();
+
+		await handlers.get("session_start")[0]({}, ctx);
+		assertEqual(statuses.get("mem0"), "mem0: on");
+		assert(tools.has("mem0_memory"), "tool should be registered from mem0.json config");
+
+		await handlers.get("input")[0]({ text: "The forge is in the basement." }, ctx);
+		await handlers.get("turn_end")[0]({ message: { role: "assistant", content: "Noted." } });
+		await handlers.get("session_shutdown")[0]({});
+
+		const addRequest = mem0.requests.find((r) => r.method === "POST" && r.url === "/memories");
+		assert(addRequest, "expected a /memories POST");
+		assertEqual(addRequest.body.user_id, "denis", "userId from mem0.json");
+		assertEqual(addRequest.headers["x-api-key"], "file-key", "api key from apiKeyVar via env");
+	} finally {
+		for (const [key, value] of Object.entries(saved)) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		fs.rmSync(dir, { recursive: true, force: true });
+		await mem0.close();
+	}
+});
+
+test("index: a malformed mem0.json surfaces on session start", async () => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mem0-harness-"));
+	fs.writeFileSync(path.join(dir, "mem0.json"), "{ not json");
+	const saved = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = dir;
+	try {
+		const { api, handlers } = makeApi();
+		mem0Extension(api);
+		const { ctx, notifications } = makeCtx();
+		await handlers.get("session_start")[0]({}, ctx);
+		const text = notifications.map((n) => n.text).join("\n");
+		assert(text.includes("mem0.json"), text);
+		assert(/invalid JSON/.test(text), text);
+	} finally {
+		if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = saved;
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
+});
+
 test("index: /mem0 profile caps the listed lines", async () => {
 	const items = Array.from({ length: 130 }, (_, i) => ({ id: `m${i}`, memory: `fact ${i}` }));
 	const mem0 = await startServer((record, res) => {
@@ -754,7 +825,7 @@ test("index: /mem0 profile caps the listed lines", async () => {
 		return true;
 	});
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mem0-harness-"));
-	fs.writeFileSync(path.join(dir, "settings.json"), "{}");
+	fs.writeFileSync(path.join(dir, "mem0.json"), "{}");
 	const saved = {};
 	for (const key of ["PI_CODING_AGENT_DIR", "PI_BOT_NAME", "MEM0_BASE_URL", "MEM0_API_KEY"]) {
 		saved[key] = process.env[key];

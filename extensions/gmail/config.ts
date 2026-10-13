@@ -2,8 +2,8 @@
  * gmail/config — non-secret connection facts for the Gmail tools.
  *
  * The account password is never here: it is read at connect time from the
- * process environment (the `pi-env` extension copies settings.json's "env"
- * block into it), from the variable named in `passwordVar`.
+ * process environment (the `env` extension copies ~/.pi/agent/env.json into
+ * it), from the variable named in `passwordVar`.
  *
  * Config file: ~/.pi/agent/gmail.json (override with GMAIL_CONFIG).
  * Kept in the agent dir, never in the package: a git package is cleaned on
@@ -18,7 +18,7 @@ export interface GmailConfig {
 	username: string;
 	host: string;
 	port: number;
-	/** Env var holding the IMAP app password (pi-env). */
+	/** Env var holding the IMAP app password (env.json). */
 	passwordVar: string;
 	/** Append-only audit log, trimmed to the last AUDIT_LIMIT entries. */
 	auditLog: string;

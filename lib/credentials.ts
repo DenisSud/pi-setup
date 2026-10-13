@@ -1,9 +1,8 @@
 /**
  * lib/credentials — credentials come from the process environment.
  *
- * The `pi-env` extension (npm:pi-env) copies the `"env"` block of
- * ~/.pi/agent/settings.json into process.env when pi starts, so a secret is
- * one flat variable read instead of a vault lookup. Consequence to accept:
+ * The `env` extension loads ~/.pi/agent/env.json into process.env when pi
+ * starts, so a secret is one flat variable read instead of a vault lookup. Consequence to accept:
  * anything with the same user can read that file — it is a convenience
  * boundary, not a sandbox.
  *
@@ -11,8 +10,8 @@
  * credentials would surface later as a confusing 401 from the server.
  */
 
-/** Env file read by pi-env; only used for the error message. */
-const ENV_SOURCE = 'the "env" block of ~/.pi/agent/settings.json (pi-env)';
+/** Env file loaded by the `env` extension; only used for the error message. */
+const ENV_SOURCE = "~/.pi/agent/env.json (loaded by the `env` extension)";
 
 /**
  * Read `names` from the environment. Throws listing every missing one, so a

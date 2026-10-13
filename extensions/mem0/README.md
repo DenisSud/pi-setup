@@ -28,14 +28,15 @@ drops its batch. Decision calls use pi's native System One endpoint
 
 ## Configuration
 
-`settings.json` key `pi-memory-mem0`; environment fallbacks fill the gaps for
-deployments without per-agent settings (the fleet container).
+`mem0.json` in the agent dir (`~/.pi/agent/mem0.json`, `PI_CODING_AGENT_DIR`
+respects a relocated agent dir); environment fallbacks fill the gaps for
+deployments without per-agent config files (the fleet container).
 
 | setting | env | default | meaning |
 |---|---|---|---|
 | `baseUrl` | `MEM0_BASE_URL` | — | server URL; required |
 | `apiKey` | `MEM0_API_KEY` | — | consumer key; required unless `apiKeyVar` resolves one |
-| `apiKeyVar` | — | — | env var holding the key (pi-env loads it from settings.json's `env`) |
+| `apiKeyVar` | — | — | env var holding the key (the `env` extension loads it from env.json) |
 | `memoryMode` | — | `hybrid` | `hybrid` / `active` / `passive` preset |
 | `autoCapture` / `autoRecall` / `toolEnabled` | — | preset | independent overrides |
 | `userId` | — | `bot:<PI_BOT_NAME>` or `$USER` | namespace |

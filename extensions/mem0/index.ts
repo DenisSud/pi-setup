@@ -20,12 +20,12 @@
  * tool lets the agent search, add, list, and delete memories on its own
  * initiative, under the same redaction and untrusted-data boundaries.
  *
- * Configuration via settings.json key "pi-memory-mem0" in the agent dir
- * ("${ENV_VAR}" and "${ENV_VAR:-fallback}" interpolation supported), with
- * environment fallbacks for deployments without per-agent settings:
+ * Configuration via mem0.json in the agent dir ("${ENV_VAR}" and
+ * "${ENV_VAR:-fallback}" interpolation supported), with environment fallbacks
+ * for deployments without per-agent config (the fleet container):
  * MEM0_BASE_URL, MEM0_API_KEY, MEM0_GATE_BASE_URL, MEM0_GATE_MODEL. The API
- * key can be read from an environment variable (apiKeyVar) that `pi-env`
- * loads from settings.json.
+ * key comes from the environment variable named by apiKeyVar, which the `env`
+ * extension loads from ~/.pi/agent/env.json.
  */
 
 import { readFileSync } from 'node:fs';
@@ -46,7 +46,7 @@ import {
 import { createMem0MemoryTool } from './tools.ts';
 import type { Mem0ExtensionConfig, Mem0RecallFrequency, MemoryUserIdScope } from './types.ts';
 
-const SETTINGS_KEY = 'pi-memory-mem0';
+const CONFIG_FILE = 'mem0.json';
 const STATUS_KEY = 'mem0';
 const MEMORY_TOOL_NAME = 'mem0_memory';
 const SESSION_RECALL_ENTRY = 'mem0-session-recall';
@@ -79,22 +79,31 @@ function expandEnv(value: unknown): unknown {
 }
 
 /**
- * Read the "pi-memory-mem0" block from the agent settings.json, then fill
- * gaps from the environment (fleet deployments carry no per-bot settings).
+ * Read mem0.json from the agent dir, then fill gaps from the environment
+ * (fleet deployments carry no per-agent config files).
  */
 function loadConfig(): Mem0ExtensionConfig {
   let config: Mem0ExtensionConfig = {};
+  const path = join(agentDir(), CONFIG_FILE);
+  let text: string | undefined;
   try {
-    const raw = JSON.parse(readFileSync(join(agentDir(), 'settings.json'), 'utf8')) as Record<
-      string,
-      unknown
-    >;
-    const section = raw[SETTINGS_KEY];
-    if (section && typeof section === 'object' && !Array.isArray(section)) {
-      config = expandEnv(section) as Mem0ExtensionConfig;
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new Error(`mem0: cannot read ${path}: ${(err as Error).message}`);
     }
-  } catch {
-    config = {};
+  }
+  if (text !== undefined) {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`mem0: ${path}: invalid JSON: ${(err as Error).message}`);
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new Error(`mem0: ${path}: the top level must be a JSON object`);
+    }
+    config = expandEnv(raw) as Mem0ExtensionConfig;
   }
   if (!config.baseUrl?.trim() && process.env.MEM0_BASE_URL) {
     config.baseUrl = process.env.MEM0_BASE_URL;
@@ -116,8 +125,8 @@ function loadConfig(): Mem0ExtensionConfig {
   if (!recallFilter.model?.trim() && process.env.MEM0_FILTER_MODEL) {
     recallFilter.model = process.env.MEM0_FILTER_MODEL;
   }
-  // Deployment-level switch: an explicit env value wins over settings (used
-  // to silence capture for bulk runs, e.g. a migration).
+  // Deployment-level switch: an explicit env value wins over the config file
+  // (used to silence capture for bulk runs, e.g. a migration).
   if (process.env.MEM0_AUTO_CAPTURE === 'true' || process.env.MEM0_AUTO_CAPTURE === 'false') {
     config.autoCapture = process.env.MEM0_AUTO_CAPTURE === 'true';
   }
@@ -128,7 +137,8 @@ let cachedApiKey: { varName: string; value: string } | undefined;
 
 /**
  * Resolve the API key from the environment variable named by config.apiKeyVar,
- * which `pi-env` fills from settings.json's "env" block. Cached per process;
+ * which the `env` extension loads from ~/.pi/agent/env.json. Cached per
+ * process;
  * the value stays in memory only.
  */
 async function resolveApiKey(config: Mem0ExtensionConfig): Promise<string | undefined> {
@@ -136,7 +146,7 @@ async function resolveApiKey(config: Mem0ExtensionConfig): Promise<string | unde
   if (!varName) return undefined;
   if (cachedApiKey?.varName === varName) return cachedApiKey.value;
   const value = process.env[varName]?.trim();
-  if (!value) throw new Error(`${varName} is not set — add it to settings.json's "env" block (pi-env).`);
+  if (!value) throw new Error(`${varName} is not set — add it to ~/.pi/agent/env.json (env extension).`);
   cachedApiKey = { varName, value };
   return value;
 }
@@ -206,8 +216,8 @@ export default function mem0Extension(pi: ExtensionAPI): void {
     activeRecallFrequency = 'user-input';
     recallQueuedThisSession = false;
     pi.setActiveTools(pi.getActiveTools().filter((name) => name !== MEMORY_TOOL_NAME));
-    const config = loadConfig();
     try {
+      const config = loadConfig();
       const mode = normalizeMem0Mode(config.mode);
       const memoryMode = normalizeMemoryMode(config.memoryMode);
       const recallFrequency = config.recallFrequency ?? 'user-input';
@@ -241,7 +251,7 @@ export default function mem0Extension(pi: ExtensionAPI): void {
       const resolvedApiKey = await resolveApiKey(config);
       if (!resolvedApiKey && !config.apiKey?.trim()) {
         throw new Error(
-          'Mem0 needs an API key: set apiKeyVar (pi-env) or apiKey / MEM0_API_KEY.',
+          'Mem0 needs an API key: set apiKeyVar (env.json) or apiKey / MEM0_API_KEY.',
         );
       }
       const newProvider = await createMem0Provider({

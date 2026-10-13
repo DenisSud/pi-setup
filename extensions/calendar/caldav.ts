@@ -84,7 +84,7 @@ function unquote(etag: string | null | undefined): string | undefined {
 async function failure(response: Response, action: string): Promise<Error> {
 	const text = (await response.text().catch(() => "")).slice(0, 300).replace(/\s+/g, " ").trim();
 	const hints: Record<number, string> = {
-		401: "check the CalDAV credentials in settings.json's \"env\" block (userVar / passwordVar) and the Radicale htpasswd entry",
+		401: "check the CalDAV credentials named by userVar / passwordVar in ~/.pi/agent/env.json, and the Radicale htpasswd entry",
 		403: "the user is authenticated but not allowed here (Radicale rights file)",
 		404: "the calendar collection may not exist yet",
 		412: "someone else changed the event since it was read (ETag mismatch)",

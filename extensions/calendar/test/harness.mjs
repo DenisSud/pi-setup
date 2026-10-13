@@ -4,7 +4,7 @@
  * ICS parsing/building and the CalDAV operations run against a mocked fetch,
  * so ETag preconditions, the expand fallback, the delete snapshot and the
  * credential path are all exercised offline. Credentials are plain environment
- * variables (pi-env in a real session).
+ * variables (loaded from env.json in a real session).
  *
  *   ./test/run.sh harness   mocked fetch (no network)
  *   ./test/run.sh live      real CalDAV on cal.sudakov.site
@@ -47,8 +47,8 @@ writeFileSync(
 	}),
 );
 process.env.CALENDAR_CONFIG = CONFIG;
-// Credentials come from the environment (pi-env fills these from settings.json
-// in a real session); here they are set directly.
+// Credentials come from the environment (the `env` extension fills these from
+// env.json in a real session); here they are set directly.
 process.env.RADICALE_AGENT_USER = "harness-user";
 process.env.RADICALE_AGENT_PASSWORD = "harness-secret";
 
@@ -530,7 +530,7 @@ test("credentials: a missing env var names the variable to set", async () => {
 		const result = await runTool(tool("calendar_list_events"), {});
 		assert(result.isError, "expected an error");
 		assert(result.content[0].text.includes("RADICALE_AGENT_PASSWORD"), result.content[0].text);
-		assert(result.content[0].text.includes("settings.json"), result.content[0].text);
+		assert(result.content[0].text.includes("env.json"), result.content[0].text);
 	} finally {
 		if (saved !== undefined) process.env.RADICALE_AGENT_PASSWORD = saved;
 		resetState();
@@ -548,14 +548,14 @@ test("config: collection path is normalised", () => {
 
 if (process.env.CALENDAR_LIVE) {
 	// The mocked tests ran with a cal.test config; drop it so the live tests
-	// talk to the real server. Credentials come from settings.json's "env"
-	// block — the same values pi-env loads in a real session.
+	// talk to the real server. Credentials come from ~/.pi/agent/env.json —
+	// the same values the `env` extension loads in a real session.
 	const goLive = () => {
 		globalThis.fetch = REAL_FETCH;
 		delete process.env.CALENDAR_CONFIG;
-		const settings = join(homedir(), ".pi", "agent", "settings.json");
-		if (existsSync(settings)) {
-			Object.assign(process.env, JSON.parse(readFileSync(settings, "utf8")).env ?? {});
+		const envFile = join(homedir(), ".pi", "agent", "env.json");
+		if (existsSync(envFile)) {
+			Object.assign(process.env, JSON.parse(readFileSync(envFile, "utf8")));
 		}
 		resetState();
 	};

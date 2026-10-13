@@ -2,8 +2,8 @@
  * calendar/config — where the personal calendar lives and who talks to it.
  *
  * No credentials here: the CalDAV user/password are read from the process
- * environment (the `pi-env` extension copies settings.json's "env" block into
- * it). The variable names are configurable via `userVar` / `passwordVar`.
+ * environment (the `env` extension copies ~/.pi/agent/env.json into it). The
+ * variable names are configurable via `userVar` / `passwordVar`.
  *
  * Config file: ~/.pi/agent/calendar.json (override with CALENDAR_CONFIG).
  * Kept in the agent dir, never in the package: a git package is cleaned on
@@ -18,9 +18,9 @@ export interface CalendarConfig {
 	baseUrl: string;
 	/** Calendar collection path, with leading and trailing slash. */
 	collection: string;
-	/** Env var holding the CalDAV user (pi-env). */
+	/** Env var holding the CalDAV user (env.json). */
 	userVar: string;
-	/** Env var holding the CalDAV password (pi-env). */
+	/** Env var holding the CalDAV password (env.json). */
 	passwordVar: string;
 	/** Timezone used for local input times and for display. */
 	timezone: string;

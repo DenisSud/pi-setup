@@ -27,9 +27,9 @@ const CONFIG = join(TMP, "config.json");
 const AUDIT = join(TMP, "audit.jsonl");
 const ATTACHMENTS = join(TMP, "attachments");
 
-/** Credentials come from the environment: pi-env fills GMAIL_APP_PASSWORD
- *  from settings.json's "env" block in a real session; here it is set directly
- *  per test. */
+/** Credentials come from the environment: the `env` extension loads
+ *  GMAIL_APP_PASSWORD from ~/.pi/agent/env.json in a real session; here it is
+ *  set directly per test. */
 function setAppPassword(value = "harness-app-password") {
 	process.env.GMAIL_APP_PASSWORD = value;
 }
@@ -568,7 +568,7 @@ test("credentials: a missing env var names the variable to set", async () => {
 		const result = await runTool(tool("email_list_drafts"), {});
 		assert(result.isError, "expected an error");
 		assert(result.content[0].text.includes("GMAIL_APP_PASSWORD"), result.content[0].text);
-		assert(result.content[0].text.includes("settings.json"), result.content[0].text);
+		assert(result.content[0].text.includes("env.json"), result.content[0].text);
 	} finally {
 		setAppPassword();
 		await resetState();
@@ -586,14 +586,14 @@ test("timestamps are marked UTC", async () => {
 if (process.env.GMAIL_LIVE) {
 	// The mocked tests run with a fake IMAP server and a temp config; the live
 	// tests swap both back inside the test body so the harness tests keep their
-	// isolation. Credentials come from settings.json's "env" block — the same
-	// values pi-env loads in a real session.
+	// isolation. Credentials come from ~/.pi/agent/env.json — the same values
+	// the `env` extension loads in a real session.
 	const goLive = async () => {
 		setImapFactory((options) => new ImapFlow(options));
 		delete process.env.GMAIL_CONFIG;
-		const settings = join(homedir(), ".pi", "agent", "settings.json");
-		if (existsSync(settings)) {
-			Object.assign(process.env, JSON.parse(readFileSync(settings, "utf8")).env ?? {});
+		const envFile = join(homedir(), ".pi", "agent", "env.json");
+		if (existsSync(envFile)) {
+			Object.assign(process.env, JSON.parse(readFileSync(envFile, "utf8")));
 		}
 		await resetState();
 	};

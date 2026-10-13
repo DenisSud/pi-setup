@@ -209,7 +209,7 @@ export async function getClient(): Promise<ImapClientLike> {
 				`gmail: Gmail rejected the app password for ${config.username} (${detail.trim()}). ` +
 					"App passwords stop working when the Google account password changes or 2FA is reset: create a new one " +
 					"(Google Account → Security → 2-Step Verification → App passwords) and update GMAIL_APP_PASSWORD " +
-					'in settings.json\'s "env" block.',
+					'in ~/.pi/agent/env.json.',
 			);
 		}
 		throw err;

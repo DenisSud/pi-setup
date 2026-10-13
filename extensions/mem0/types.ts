@@ -61,8 +61,8 @@ export interface Mem0ExtensionConfig {
   apiKey?: string;
   /**
    * Env var holding the API key, read from the process environment (the
-   * `pi-env` extension copies settings.json's "env" block into it). Takes
-   * precedence over apiKey. Default: "MEM0_ADMIN_API_KEY".
+   * `env` extension copies ~/.pi/agent/env.json into it). Takes precedence
+   * over apiKey. There is no default: set it or use apiKey.
    */
   apiKeyVar?: string;
   /** Required self-hosted Mem0 server URL. */

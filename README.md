@@ -36,18 +36,18 @@ pi config
 
 | extension | what it does |
 |---|---|
+| `env` | loads `~/.pi/agent/env.json` into `process.env` at startup (names-only `/env` command) |
 | `web-search` | `web_search` (SearXNG) — source discovery only; reading pages is curl or the `agent-browser` skill |
 | `mem0` | semantic memory: auto-recall + batched auto-capture + `mem0_memory` tool |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 
-Credentials are plain environment variables: `calendar`, `gmail` and `mem0`
-read them from `process.env`, and the third-party `pi-env` extension
-(`npm:pi-env`, in `settings.json`'s `packages`) loads them from the `env` block
-of `~/.pi/agent/settings.json` at startup. One machine-local file, no vault and
-no prompt — the trade-off is that any process running as the same user can read
-those values. No ptc; no systemone (mem0 speaks pi's native System One endpoint
-directly).
+Each extension keeps its own config file in the agent dir, never a key in
+`settings.json` and never in the package. Credentials are plain environment
+variables: `env` puts them in `process.env` from `~/.pi/agent/env.json`, and
+`calendar`, `gmail` and `mem0` read them from there. No vault, no prompt — the
+trade-off is that any process running as the same user can read those values.
+No ptc; no systemone (mem0 speaks pi's native System One endpoint directly).
 
 ### Lib
 
@@ -74,9 +74,11 @@ cleaned on update. Per-device config lives in the agent dir:
 
 | file | for |
 |---|---|
-| `~/.pi/agent/settings.json` | machine settings **and the `env` block with all credentials** (mode 600) |
+| `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; override path with `PI_ENV_CONFIG`) |
+| `~/.pi/agent/mem0.json` | mem0 server URL, `apiKeyVar`, namespace, capture/recall knobs |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
+| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages. Extensions do not add keys here. |
 | `~/.pi/agent/decision.json` | **retired** — safe to delete |
 
 System dependencies (not npm): SearXNG, `nvidia-smi`, `agent-browser` and
@@ -94,4 +96,4 @@ extensions/<name>/test/run.sh harness
 
 The harnesses stub the pi API and the network — no credentials, no network.
 The `live` variant of each reads the `env` block of `~/.pi/agent/settings.json`
-the same way `pi-env` does in a session.
+the same way the `env` extension does in a session.
