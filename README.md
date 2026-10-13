@@ -37,7 +37,6 @@ pi config
 | extension | what it does |
 |---|---|
 | `security` | Bitwarden (`rbw`) secrets profiles, output redaction, credential-store guard |
-| `sysinfo` | injects OS/hardware/time/locale as `<system_info>`; GPU VRAM cached per UUID |
 | `web-search` | `web_search` (SearXNG) + `web_fetch` (trafilatura/pandoc, pdftotext) |
 | `mem0` | semantic memory: auto-recall + batched auto-capture + `mem0_memory` tool |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
