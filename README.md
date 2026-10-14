@@ -55,7 +55,8 @@ cache of `origin/main` and pi deletes anything not pushed.
 ### Skills
 
 `skills/` holds the skills the agent discovers: `engineering/`, `productivity/`,
-and tool skills at the top level (`agent-browser`, `memory-consolidation`, …).
+`education/`, and tool skills at the top level (`agent-browser`,
+`memory-consolidation`, …).
 Each skill is a directory with a `SKILL.md` whose frontmatter decides when it
 fires.
 
