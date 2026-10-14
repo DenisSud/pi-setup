@@ -9,22 +9,27 @@ Usage:
   --dst        vault course folder; default ~/Documents/Notes/education/<folder>
   --inventory  print the mirror's shape + how resources classify, then exit
 
-Build output (idempotent — existing files are skipped):
-    <dst>/sc/unit-N-*/part-*/sN-*/   session notes, problems, solutions, transcripts
-    <dst>/exams/                     examN.pdf, examN-solutions.pdf, final*
-    <dst>/problem-sets/books/        <book>-problems.pdf / <book>-solutions.pdf
-    <dst>/syllabus.md                session index (videos stay external links)
+Build output (idempotent — existing copies are skipped):
+    <dst>/sc/unit-N-*/part-*/sN-*/   session notes*, problems*, solutions*, transcripts
+    <dst>/sessions/                  one progress note per session (done, links)
+    <dst>/exams/                     examN.pdf, final*.pdf + eN.md / final.md notes
+    <dst>/problem-sets/books/        <book>-problems.pdf / <book>-solutions.pdf + psN.md
+    <dst>/syllabus.md                session index; checkbox state mirrors the notes
+    <dst>/<course>.base              Bases views: Next up / Sessions / Board / Exams / Problem sets
 
-Session, problem-set and exam bullets in syllabus.md are checkboxes; a rebuild
-re-reads the existing file and re-applies the checked state.
+Progress lives in the generated notes (`done`). The rebuild unions the checked
+state of syllabus.md with the notes and writes both, so ticking anywhere counts.
+Clearing a tick requires clearing both (or asking).
 """
-import argparse, collections, glob, json, os, re, shutil, sys, urllib.parse
+import argparse, collections, glob, json, os, re, shutil, subprocess, sys, urllib.parse
 
 # --------------------------------------------------------------------------
 # Course configs. Add one entry per course; `--inventory` shows what its
 # resource file names look like so the patterns can be filled in.
 # Group meanings: note=(session nr, letter), problem=(nr, letter, prb|sol),
 # book=(book nr, prb|sol), exam=(examN|final, sol?).
+# exam_ranges: sessions grouped under an exam on the calendar (losest..review).
+# vault_prefix: course path inside the vault, for wikilinks in frontmatter.
 # --------------------------------------------------------------------------
 CONFIGS = {
     '18.01': {
@@ -48,7 +53,10 @@ CONFIGS = {
         'books': {'1': 'differentiation', '2': 'applications-of-differentiation',
                   '3': 'integration', '4': 'applications-of-integration',
                   '5': 'integration-techniques'},
+        'exam_ranges': [(1, 22, 'E1'), (23, 42, 'E2'), (43, 67, 'E3'),
+                        (68, 86, 'E4'), (87, 102, 'Final')],
         'folder_fix': {'review-for-exam-3': 's66-review-for-exam-3'},
+        'vault_prefix': 'education/18.01',
     },
 }
 
@@ -132,6 +140,26 @@ def caption_paths(video_d, src):
     return (srt or found or [None])[0]
 
 
+def merge_pdfs(sources, out):
+    """Merge PDFs into out (pdfunite, qpdf fallback). Atomic replace."""
+    tmp = out + '.tmp.pdf'
+    if os.path.exists(tmp):
+        os.remove(tmp)
+    if MERGE_TOOL == 'pdfunite':
+        cmd = ['pdfunite', *sources, tmp]
+    elif MERGE_TOOL == 'qpdf':
+        cmd = ['qpdf', '--empty', '--pages', *sources, '--', tmp]
+    else:
+        sys.exit('need pdfunite or qpdf to merge session pdfs')
+    r = subprocess.run(cmd, capture_output=True)
+    if r.returncode != 0 or not os.path.exists(tmp):
+        sys.exit(f'merge failed for {out}: {r.stderr.decode()[:300]}')
+    os.replace(tmp, out)
+
+
+MERGE_TOOL = 'pdfunite' if shutil.which('pdfunite') else ('qpdf' if shutil.which('qpdf') else None)
+
+
 def classify_session_files(parent, by, cfg):
     out = {'notes': [], 'extra': [], 'prb': [], 'sol': [], 'videos': []}
     for d in by.get(parent, []):
@@ -172,6 +200,17 @@ def natkey(title):
 def sessnum(title):
     m = re.match(r'^Session (\d+)', title or '')
     return int(m.group(1)) if m else 10 ** 9
+
+
+def yq(s):
+    """YAML double-quoted scalar."""
+    return '"' + str(s).replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def ywl(paths):
+    """Frontmatter value for one or more wikilinks."""
+    links = [f'[[{p}]]' for p in paths]
+    return yq(links[0]) if len(links) == 1 else '[' + ', '.join(yq(l) for l in links) + ']'
 
 
 def read_states(path):
@@ -217,6 +256,152 @@ def checkboxize(line, states):
 
 
 # --------------------------------------------------------------------------
+# progress notes (frontmatter `done` is the source; syllabus mirrors it)
+# --------------------------------------------------------------------------
+def done_true(path):
+    return bool(re.search(r'^done:\s*true\s*$', open(path, encoding='utf-8').read(), re.M))
+
+
+def read_note_states(dst):
+    """done state from existing generated notes (keyed like read_states)."""
+    st = {}
+    for p in glob.glob(f'{dst}/sessions/*.md'):
+        m = re.match(r'^s(\d+)-', os.path.basename(p))
+        if m and done_true(p):
+            st[f'session:{m.group(1)}'] = True
+    for p in glob.glob(f'{dst}/problem-sets/ps*.md'):
+        m = re.match(r'^ps(\d+)\.md$', os.path.basename(p))
+        if m and done_true(p):
+            st[f'pset:{m.group(1)}'] = True
+    for p in glob.glob(f'{dst}/exams/*.md'):
+        b = os.path.basename(p)
+        if b == 'final.md' and done_true(p):
+            st['final'] = True
+        m = re.match(r'^e(\d+)\.md$', b)
+        if m and done_true(p):
+            st[f'exam:{m.group(1)}'] = True
+    return st
+
+
+def read_frontmatter_lines(path):
+    """[(key, raw line)] of the frontmatter block, or []."""
+    if not os.path.exists(path):
+        return []
+    t = open(path, encoding='utf-8').read()
+    m = re.match(r'^---\n(.*?)\n---', t, re.S)
+    if not m:
+        return []
+    out = []
+    for line in m.group(1).split('\n'):
+        mm = re.match(r'^([A-Za-z_][\w-]*):', line)
+        if mm:
+            out.append((mm.group(1), line))
+    return out
+
+
+def write_note(path, head, managed, body, defaults_after=(), counts=None):
+    """Write a generated note, preserving user keys (anything not `managed`)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    head_keys = {re.match(r'^([A-Za-z_][\w-]*):', h).group(1) for h in head}
+    extras = [(k, ln) for k, ln in read_frontmatter_lines(path)
+              if k not in managed and k not in head_keys]
+    keys = head_keys | {k for k, _ in extras}
+    for d in defaults_after:
+        if re.match(r'^([A-Za-z_][\w-]*):', d).group(1) not in keys:
+            extras.append((None, d))
+    content = ('---\n' + '\n'.join(head + [ln for _, ln in extras]) + '\n---\n\n'
+               + '\n'.join(body).rstrip('\n') + '\n')
+    old = open(path, encoding='utf-8').read() if os.path.exists(path) else None
+    if old == content:
+        if counts is not None:
+            counts['note-same'] += 1
+    else:
+        open(path, 'w', encoding='utf-8').write(content)
+        if counts is not None:
+            counts['note-write'] += 1
+
+
+MANAGED_SESSION = {'type', 'course', 'session', 'title', 'unit', 'part', 'exam',
+                   'done', 'video', 'notes', 'problems', 'solutions'}
+MANAGED_PS = {'type', 'course', 'ps', 'done'}
+MANAGED_EXAM = {'type', 'course', 'exam', 'done'}
+
+
+BASE_TMPL = '''filters:
+  and:
+    - 'course == {course}'
+
+properties:
+  session: {{displayName: Session}}
+  title: {{displayName: Title}}
+  unit: {{displayName: Unit}}
+  exam: {{displayName: Exam}}
+  done: {{displayName: Done}}
+  video: {{displayName: Video}}
+  notes: {{displayName: Notes}}
+  problems: {{displayName: Problems}}
+  solutions: {{displayName: Solutions}}
+  ps: {{displayName: PS}}
+  score: {{displayName: Score}}
+  file.mtime: {{displayName: Updated}}
+
+views:
+  - type: table
+    name: Next up
+    limit: 6
+    filters:
+      and:
+        - 'type == "session"'
+        - 'done != true'
+    order: [session, title, unit, exam, video, problems]
+    sort:
+      - property: session
+        direction: ASC
+  - type: table
+    name: Sessions
+    filters:
+      and:
+        - 'type == "session"'
+    groupBy:
+      property: unit
+      direction: ASC
+    order: [session, title, exam, done, video, notes, problems, solutions]
+    sort:
+      - property: session
+        direction: ASC
+    summaries:
+      done: Checked
+  - type: kanban
+    name: Board
+    filters:
+      and:
+        - 'type == "session"'
+    groupBy:
+      property: done
+      direction: ASC
+    order: [title, session, exam]
+  - type: table
+    name: Exams
+    filters:
+      and:
+        - 'type == "exam"'
+    order: [exam, done, score, file.mtime]
+    sort:
+      - property: exam
+        direction: ASC
+  - type: table
+    name: Problem sets
+    filters:
+      and:
+        - 'type == "problem-set"'
+    order: [ps, done, file.mtime]
+    sort:
+      - property: ps
+        direction: ASC
+'''
+
+
+# --------------------------------------------------------------------------
 # build
 # --------------------------------------------------------------------------
 def build(src, dst, cfg):
@@ -228,9 +413,14 @@ def build(src, dst, cfg):
 
     counts = collections.Counter()
     syllabus = []
+    session_meta, ps_meta, exam_meta = [], [], []
+    unit_ctx = {}
 
     def rel(p):
         return urllib.parse.quote(os.path.relpath(p, dst))
+
+    def wl(p):
+        return cfg['vault_prefix'] + '/' + os.path.relpath(p, dst).replace(os.sep, '/')
 
     def copy(s, d):
         os.makedirs(os.path.dirname(d), exist_ok=True)
@@ -246,27 +436,46 @@ def build(src, dst, cfg):
         assert d.startswith('pages/'), d
         return cfg['url'] + d + '/'
 
-    def note_links(f, sdir):
-        links = []
+    def ensure_merged(sources, out, stale_pat):
+        """Merge `sources` -> `out`; drop superseded lettered files next to it."""
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        stale = [p for p in glob.glob(os.path.join(os.path.dirname(out), stale_pat))
+                 if os.path.abspath(p) != os.path.abspath(out)]
+        if (not os.path.exists(out)) or stale:
+            if len(sources) == 1:
+                shutil.copy2(sources[0], out)
+            else:
+                merge_pdfs(sources, out)
+            counts['merged'] += 1
+        for p in stale:
+            os.remove(p)
+            counts['cleaned'] += 1
+        return out if os.path.exists(out) else None
+
+    def render_notes(f, sdir):
+        sources = []
         for letter, d in f['notes']:
             sp = static_path(d, src)
-            if not sp:
-                continue
-            name = f'notes-{letter}.pdf' if letter else 'notes.pdf'
-            d2 = os.path.join(sdir, name)
-            copy(sp, d2)
-            links.append(f'[notes {letter or ""}]({rel(d2)})'.replace('notes ]', 'notes]'))
+            if sp:
+                sources.append(sp)
         for d in f['extra']:
             sp = static_path(d, src)
-            if not sp:
-                continue
-            base = clean_name(os.path.basename(d.get('file') or 'extra.pdf'))
-            d2 = os.path.join(sdir, f'notes-{base}')
-            copy(sp, d2)
-            links.append(f'[notes extra]({rel(d2)})')
-        return links
+            if sp:
+                sources.append(sp)
+        if not sources:
+            return [], []
+        out = ensure_merged(sources, os.path.join(sdir, 'notes.pdf'), 'notes-*.pdf')
+        return ([f'[notes]({rel(out)})'], [wl(out)]) if out else ([], [])
 
-    def session_video_links(f, sdir):
+    def render_problems(f, sdir, kind, label):
+        sources = [sp for _, d in f[kind] if (sp := static_path(d, src))]
+        if not sources:
+            return [], []
+        out = ensure_merged(sources, os.path.join(sdir, f'{label}.pdf'), f'{label}-*.pdf')
+        return ([f'[{label}]({rel(out)})'], [wl(out)]) if out else ([], [])
+
+    def render_videos(f, sdir):
+        """(md parts, primary lecture url) — same output as before."""
         parts = []
         lect = {}
         for v in f['videos']:
@@ -279,10 +488,13 @@ def build(src, dst, cfg):
             st = v.get('start_time')
             if st and (cur['min'] is None or float(st) < cur['min']):
                 cur['min'] = float(st)
+        primary = None
         vi = 0
         for yt, info in lect.items():
             vi += 1
             link = f"https://youtu.be/{yt}?t={int(info['min'])}" if info['min'] else f'https://youtu.be/{yt}'
+            if primary is None:
+                primary = link
             label = 'lecture video' if len(lect) == 1 else f'lecture video {vi}'
             cap = None
             for v in f['videos']:
@@ -303,6 +515,8 @@ def build(src, dst, cfg):
             link = yt_link(v)
             if not link:
                 continue
+            if primary is None:
+                primary = link
             cap = caption_paths(v, src)
             txt = ''
             if cap:
@@ -312,24 +526,37 @@ def build(src, dst, cfg):
                 copy(cap, d2)
                 txt = f' [transcript]({rel(d2)})'
             parts.append(f"[video: {v.get('title')}]({link}){txt}")
-        return parts
+        return parts, primary
 
-    def session_line(s, sdir):
+    def exam_for(num):
+        for lo, hi, lbl in cfg.get('exam_ranges', []):
+            if lo <= num <= hi:
+                return lbl
+        return None
+
+    def render_session(s, sdir, part_title):
         f = classify_session_files(s['title'], by, cfg)
-        parts = [f"**{s['title']}** — [OCW page]({ocw_url(s)})"]
-        parts += session_video_links(f, sdir)
-        nl = note_links(f, sdir)
-        if nl:
-            parts.append(' '.join(nl))
-        for kind, label in (('prb', 'problems'), ('sol', 'solutions')):
-            for letter, d in f[kind]:
-                sp = static_path(d, src)
-                if not sp:
-                    continue
-                name = f'{label}-{letter}.pdf' if letter else f'{label}.pdf'
-                d2 = os.path.join(sdir, name)
-                copy(sp, d2)
-                parts.append(f"[{label}{' ' + letter if letter else ''}]({rel(d2)})")
+        vid_md, vid_url = render_videos(f, sdir)
+        notes_md, notes_wl = render_notes(f, sdir)
+        prb_md, prb_wl = render_problems(f, sdir, 'prb', 'problems')
+        sol_md, sol_wl = render_problems(f, sdir, 'sol', 'solutions')
+        num = sessnum(s['title'])
+        return {'num': num, 'name': os.path.basename(sdir), 'full': s['title'],
+                'short': re.sub(r'^Session \d+:\s*', '', s['title']),
+                'unit': unit_ctx.get('title'), 'part': part_title,
+                'exam': exam_for(num), 'ocw': ocw_url(s),
+                'vid_md': vid_md, 'vid_url': vid_url,
+                'notes_md': notes_md, 'notes_wl': notes_wl,
+                'prb_md': prb_md, 'prb_wl': prb_wl,
+                'sol_md': sol_md, 'sol_wl': sol_wl}
+
+    def session_line_md(m):
+        parts = [f"**{m['full']}**", f"[note](sessions/{m['name']}.md)",
+                 f"[OCW page]({m['ocw']})"]
+        parts += m['vid_md']
+        if m['notes_md']:
+            parts.append(' '.join(m['notes_md']))
+        parts += m['prb_md'] + m['sol_md']
         return '- ' + ' · '.join(parts)
 
     def process_part(part_d, unit_folder, indent):
@@ -342,7 +569,9 @@ def build(src, dst, cfg):
                        key=lambda c: sessnum(c['title'].replace('Problem Set', 'Session')))
         for s in sessions:
             sdir = os.path.join(part_dir, slug_to_folder(os.path.basename(s['_dir']), cfg))
-            lines.append(session_line(s, sdir))
+            m = render_session(s, sdir, part_d.get('title'))
+            session_meta.append(m)
+            lines.append(session_line_md(m))
         for ps in psets:
             books, seen = [], set()
             for d in by.get(ps['title'], []):
@@ -359,6 +588,8 @@ def build(src, dst, cfg):
                 if os.path.exists(p):
                     links.append(f'[{bname if kind == "prb" else bname + " solutions"}]({rel(p)})')
             lines.append(f"- **{ps['title']}** — [assigned exercises](problem-sets/README.md) · " + ' · '.join(links))
+            ps_meta.append({'num': sessnum(ps['title'].replace('Problem Set', 'Session')),
+                            'title': ps['title'], 'ocw': ocw_url(ps), 'books': sorted(books)})
         if lines:
             syllabus.append((indent, part_d.get('title'), lines))
 
@@ -370,17 +601,17 @@ def build(src, dst, cfg):
         for u in sorted(kids[exam_d['uid']], key=lambda u: sessnum(pages[u]['title'])):
             s = pages[u]
             sdir = os.path.join(exam_dir, slug_to_folder(os.path.basename(s['_dir']), cfg))
-            f = classify_session_files(s['title'], by, cfg)
-            parts = [f"**{s['title']}** — [OCW page]({ocw_url(s)})"]
-            nl = note_links(f, sdir)
-            if nl:
-                parts.append(' '.join(nl))
-            lines.append('- ' + ' · '.join(parts))
+            m = render_session(s, sdir, exam_d.get('title'))
+            session_meta.append(m)
+            lines.append(session_line_md(m))
         syllabus.append((indent, exam_d['title'], lines))
+        exam_meta.append({'name': f'e{num}', 'label': f'E{num}', 'title': f'Exam {num}',
+                          'pdf': f'exam{num}.pdf', 'sol': f'exam{num}-solutions.pdf'})
 
     def process_unit(unit_d):
         unit_slug = os.path.basename(unit_d['_dir'])
         unit_folder = cfg['units'].get(unit_slug, unit_slug)
+        unit_ctx['title'] = unit_d.get('title')
         syllabus.append((0, unit_d.get('title'), []))
         children = [pages[u] for u in kids[unit_d['uid']]]
         for c in sorted([c for c in children if str(c.get('title', '')).startswith('Part ')],
@@ -436,10 +667,79 @@ def build(src, dst, cfg):
             final_lines.append(f'- [Final exam]({rel(os.path.join(dst, "exams", "final.pdf"))})'
                                f' · [solutions]({rel(os.path.join(dst, "exams", "final-solutions.pdf"))})')
             final_lines.append(f'- {t} — [OCW page]({ocw_url(d)})')
+            exam_meta.append({'name': 'final', 'label': 'Final', 'title': 'Final Exam',
+                              'pdf': 'final.pdf', 'sol': 'final-solutions.pdf'})
             continue
         if re.match(r'^\d+\.', t):
             process_unit(d)
     syllabus.append((0, 'Final Exam', final_lines))
+
+    # -- progress notes (session / problem-set / exam), done = syllabus OR note
+    states = read_states(os.path.join(dst, 'syllabus.md'))
+    for k, v in read_note_states(dst).items():
+        states[k] = states.get(k, False) or v
+
+    for m in session_meta:
+        head = [f'type: session', f'course: {yq(cfg["folder"])}', f'session: {m["num"]}',
+                f'title: {yq(m["short"])}', f'unit: {yq(m["unit"])}',
+                f'done: {"true" if states.get(f"session:{m["num"]}") else "false"}']
+        if m['part']:
+            head.append(f'part: {yq(m["part"])}')
+        if m['exam']:
+            head.append(f'exam: {yq(m["exam"])}')
+        if m['vid_url']:
+            head.append(f'video: {yq(m["vid_url"])}')
+        if m['notes_wl']:
+            head.append(f'notes: {ywl(m["notes_wl"])}')
+        if m['prb_wl']:
+            head.append(f'problems: {ywl(m["prb_wl"])}')
+        if m['sol_wl']:
+            head.append(f'solutions: {ywl(m["sol_wl"])}')
+        ctx = ' · '.join([x for x in (m['unit'], m['part'],
+                                      f"Exam {m['exam']}" if m['exam'] else None) if x])
+        body = [f"# {m['full']}", '', ctx, '',
+                f"- [OCW page]({m['ocw']})"]
+        if m['vid_md']:
+            body.append('- ' + ' · '.join(m['vid_md']))
+        if m['notes_md']:
+            body.append('- ' + ' '.join(m['notes_md']))
+        if m['prb_md'] or m['sol_md']:
+            body.append('- ' + ' · '.join(m['prb_md'] + m['sol_md']))
+        body += ['', '## My notes', '']
+        write_note(os.path.join(dst, 'sessions', m['name'] + '.md'), head,
+                   MANAGED_SESSION, body, counts=counts)
+
+    for m in ps_meta:
+        head = [f'type: problem-set', f'course: {yq(cfg["folder"])}', f'ps: {m["num"]}',
+                f'done: {"true" if states.get(f"pset:{m["num"]}") else "false"}']
+        body = [f"# {m['title']}", '', f"- [OCW page]({m['ocw']})",
+                '- [assigned exercises](README.md)']
+        bl = []
+        for bname, kind in m['books']:
+            label = bname if kind == 'prb' else f'{bname} solutions'
+            fpath = f'books/{bname}-{"problems" if kind == "prb" else "solutions"}.pdf'
+            bl.append(f'[{label}]({fpath})')
+        if bl:
+            body.append('- ' + ' · '.join(bl))
+        write_note(os.path.join(dst, 'problem-sets', f'ps{m["num"]}.md'), head,
+                   MANAGED_PS, body, counts=counts)
+
+    for m in exam_meta:
+        key = 'final' if m['name'] == 'final' else f'exam:{m["name"][1:]}'
+        head = [f'type: exam', f'course: {yq(cfg["folder"])}', f'exam: {yq(m["label"])}',
+                f'done: {"true" if states.get(key) else "false"}']
+        body = [f"# {m['title']}", '',
+                f"- [exam]({m['pdf']}) · [solutions]({m['sol']})"]
+        write_note(os.path.join(dst, 'exams', f"{m['name']}.md"), head,
+                   MANAGED_EXAM, body, defaults_after=['score:'], counts=counts)
+
+    # -- bases file
+    base_path = os.path.join(dst, f"{cfg['folder']}.base")
+    base = BASE_TMPL.format(course=yq(cfg['folder']))
+    old = open(base_path, encoding='utf-8').read() if os.path.exists(base_path) else None
+    if old != base:
+        open(base_path, 'w', encoding='utf-8').write(base)
+        counts['base-write'] += 1
 
     # -- syllabus
     import datetime
@@ -449,8 +749,8 @@ def build(src, dst, cfg):
            'Session-by-session index of the local course materials under `sc/`. Videos link out to YouTube;',
            'lecture transcripts, notes, problems and solutions are local. Exam PDFs are in `exams/`;',
            'problem books in `problem-sets/books/`. Assigned exercises per problem set: `problem-sets/README.md`.',
+           'Progress lives in the `sessions/` notes and the course `.base` view — the checkboxes here mirror them.',
            '', f'Course page: {cfg["url"]}', '']
-    states = read_states(os.path.join(dst, 'syllabus.md'))
     for indent, title, lines in syllabus:
         out += ['#' * (2 + indent) + ' ' + title, ''] + \
                [checkboxize(l, states) for l in lines] + ['']

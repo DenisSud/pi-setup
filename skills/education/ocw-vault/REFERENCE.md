@@ -19,17 +19,19 @@ An OCW download is a static mirror of the course site:
 ## Vault conventions
 
 - `sc/unit-N-<page slug>/<part slug>/s<N>-<page slug>/` — slugs come from the site directories, numbers stay in the folder name.
-- Files per session: `notes.pdf` / `notes-a.pdf`… (letters follow the source names), `problems.pdf`, `solutions.pdf`, `lecture.srt` (`lecture-N.srt` when a session has several clips), `video-<title slug>.srt`. Rare extra lecture notes keep their source name: `notes-<name>.pdf`.
+- Files per session: `notes.pdf`, `problems.pdf`, `solutions.pdf` — merged with `pdfunite` (qpdf fallback) from the lettered source files; superseded lettered files are removed on rebuild. Captions: `lecture.srt` (`lecture-N.srt` when a session has several clips), `video-<title slug>.srt` (`.vtt` only when no `.srt` exists).
+- `sessions/sN-<slug>.md` — one progress note per session: `type/session/course/title/unit/part/exam/done` + `video`, `notes`, `problems`, `solutions` wikilinks and a free `## My notes` body. `problem-sets/psN.md` and `exams/eN.md` / `final.md` mirror this for sets and exams (`score` on exams).
+- `<course>.base` — Bases dashboard: **Next up** (undone sessions, sorted, limit 6), **Sessions** (grouped by unit, Checked/Unchecked summary per group), **Board** (kanban grouped by `done`, drag to complete), **Exams**, **Problem sets**.
 - `exams/`: `examN.pdf` + `examN-solutions.pdf`, `final.pdf` + `final-solutions.pdf`.
 - `problem-sets/books/`: `<book>-problems.pdf` / `<book>-solutions.pdf`.
 - `syllabus.md`: `#` unit → `##` part (Exam sections included), one bullet per session: OCW page · lecture video(s) · transcripts · notes · problems · solutions; problem-set bullets link the books.
-- Session, problem-set and exam bullets are checkboxes (`- [ ]`); Denis ticks them as he progresses. The unpack script reads the existing syllabus before rewriting and re-applies the checked state, so ticks survive rebuilds.
+- Session, problem-set and exam bullets are checkboxes (`- [ ]`). The notes are the source of truth: the rebuild unions note `done` with the syllabus boxes and writes both, so a tick anywhere counts — clearing a tick requires clearing it in both places (or asking).
 - Doc chain: calendar `W#` events > `academic-plan.md` > course `README.md` > `syllabus.md`.
 
 ## Adding a new course
 
 1. Extract the zip; run `--inventory`. The report shows the page tree, which files match each pattern, and what stays unmatched — the shape you need for the config.
-2. Open two or three `resources/*/data.json` plus the buckets' samples, then fill the `CONFIGS` entry: `folder`, `url`, `syllabus_title/heading`, `note_res`, `problem_re`, `book_re`, `exam_re`, `final_title`, `units`, `books`, `folder_fix`.
+2. Open two or three `resources/*/data.json` plus the buckets' samples, then fill the `CONFIGS` entry: `folder`, `url`, `syllabus_title/heading`, `note_res`, `problem_re`, `book_re`, `exam_re`, `final_title`, `units`, `books`, `exam_ranges` (session ranges per exam, reviews included), `vault_prefix`, `folder_fix`. Builds need `pdfunite` (poppler) or `qpdf` on PATH.
 3. Run against a scratch `--dst`, compare file counts and spot-check the syllabus; then build for real.
 
 ## Quirks seen so far
@@ -39,6 +41,7 @@ An OCW download is a static mirror of the course site:
 - "Materials for Exam N" sessions hold the exam PDF; the review sessions hold notes only.
 - The final exam hides on its own root page (18.01SC: `Session 102: Materials for Final Exam`), matched per course by `final_title`.
 - A page slug can lack its session number (18.01SC's exam-3 review) — fix with `folder_fix`.
+- Some source PDFs carry xref defects; poppler warns while merging but the merged file still opens.
 - Transcript PDFs, thumbnails, mathlets and HTML are deliberately left out; the syllabus links the OCW page and YouTube instead.
 
 ## Migrating between course editions
