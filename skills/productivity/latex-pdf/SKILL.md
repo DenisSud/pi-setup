@@ -25,7 +25,10 @@ varies.
    ```
 
    Create `<doc>/`, put `<doc>/<doc>.tex` in it. Done when the `.tex` exists.
-   Keep LaTeX work out of `~/Documents/Notes` while the LiveSync migration is ongoing.
+   **`~/dev/latex/` is the workdir for all LaTeX** — keep `.tex`, `.pdf` and
+   build artifacts out of the vault, other repos and the home directory unless
+   Denis names another destination (the resume sources under
+   `Notes/projects/resume/` are the one existing exception).
 2. **Verify the tooling** by compiling from the root:
    `devenv shell pdflatex -interaction=nonstopmode -output-directory=<doc> <doc>/<doc>.tex`.
    Done when no missing-package error appears. Known gotchas:

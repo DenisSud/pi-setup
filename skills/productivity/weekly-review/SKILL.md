@@ -15,15 +15,16 @@ One question at a time, each with a suggested answer.
 - Goals + this-week-next live in `backlog.md`. No habit tracker —
   tracker.json and the dashboard were removed 2026-10-12 as ineffective.
 - `~/Documents/Notes/personal/daily-routine.md` — the day's shape.
-- `~/Documents/Notes/personal/briefs/` — the week's morning briefs (the planned
-  side of the week).
+- `~/Documents/Notes/personal/daily briefs/` — the week's morning briefs (the
+  planned side of the week). One dated file per day, no `today.md` mirror.
 - Last week's calendar events via `calendar_list_events` (the reliable record:
   day-cards and blocks — briefs may be sparse, since Denis plans mornings
   manually when the day is obvious).
 
 ## Steps
 
-1. **Load.** Pull the backlog and last week's calendar events. Note the last
+1. **Load.** Pull the backlog, the study plan (`~/Documents/Notes/education/academic-plan.md`
+   — majors rows + the minors table), and last week's calendar events. Note the last
    review date. Done when you can name each active goal, the open prep windows,
    and the week's fixed commitments.
 
@@ -50,12 +51,14 @@ One question at a time, each with a suggested answer.
 4. **Build next week.** Draft next week's list from the backlog horizons and
    the active prep windows. Respect the standing shape: deep academic blocks
    ×6 (3–4 h: math course first, LeetCode evening blocks), German 30–45 min
-   daily inside blocks, gym 3–4 evening sessions (hard cap 4), one admin
-   block, one job/scan block as needed, deload week every 5th (1–2 h,
-   review-only — lighter days, same shape). **Book each day as an all-day
+   daily inside blocks, one admin block, one job/scan block as needed, deload
+   week every 5th (1–2 h, review-only — lighter days, same shape). **Book each day as an all-day
    day-card** naming the day's work — no times; times are cut in the morning
    plan. Times are only fixed now for true fixed commitments. Overload gets
    named with a proposed cut, never silently accepted.
+
+   **Gym is external** — sessions are logged in opengym, never booked as
+   calendar events, so the shape above carries no gym blocks.
 
    **Planning ladder:** the monthly planning event (1st of month, populated by
    the last Sunday review of the prior month) states what the month owns and
@@ -72,9 +75,10 @@ One question at a time, each with a suggested answer.
 5. **Prune.** A task that has slipped 3+ days gets split or killed — propose
    which. Remove dead weight and tasks that stopped mattering.
 
-6. **Pulse.** From the calendar record + Denis's answer: deep-work days, gym
-   sessions, planning mornings that held. Compare to last week; flag the
-   trend, not the absolute.
+6. **Pulse.** From the calendar record + Denis's answer: deep-work days,
+   planning mornings that held. Compare to last week; flag the
+   trend, not the absolute. Gym is not on the calendar — it lives in opengym,
+   so ask rather than infer it from events.
 
 7. **Upgrade proposals.** Anything repeated during the week is a candidate for
    the self-improvement ladder (task → skill → automation) — propose at most
