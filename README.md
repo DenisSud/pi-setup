@@ -54,13 +54,18 @@ cache of `origin/main` and pi deletes anything not pushed.
 
 ### Skills
 
-`skills/` holds the skills the agent discovers: `engineering/`,
-`productivity/`, and tool skills at the top level (`agent-browser`,
-`memory-consolidation`, …).
-Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
-the vault itself: `~/Documents/Notes/.pi/skills/`.
+`skills/` holds the skills the agent discovers: `productivity/`, and tool skills
+at the top level (`agent-browser`, `memory-consolidation`, …).
 Each skill is a directory with a `SKILL.md` whose frontmatter decides when it
 fires.
+
+Engineering skills are **not** vendored here — they move too fast and each
+project adapts them. `setup-project` clones
+[mattpocock/skills](https://github.com/mattpocock/skills) to `/tmp` and installs
+them into the project, so the repo owns its copy.
+
+Vault-only skills (`daily-planning`, `weekly-review`, `ocw-vault`) live in the
+vault itself: `~/Documents/Notes/.pi/skills/`.
 
 ## Conventions
 
