@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; font-family: "JetBrains Mono", monospace; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const W = Number(q.get("w") ?? 2560);
+const H = Number(q.get("h") ?? 1440);
+const SEC = Number(q.get("sec") ?? 3);
+const FPS = Number(q.get("fps") ?? 30);
+const COLS = Number(q.get("cols") ?? 160);
+const SEED = Number(q.get("seed") ?? 7);
+const SETTLE = Number(q.get("settle") ?? 10);
+const SUB = Number(q.get("sub") ?? 6);       // RD steps per rendered frame
+
+const log = (m) => fetch("/log", { method: "POST", body: m });
+const canvas = document.getElementById("c");
+canvas.style.width = W + "px";
+canvas.style.height = H + "px";
+await document.fonts.load('400 16px "JetBrains Mono"');
+await document.fonts.ready;
+
+let s = SEED >>> 0 || 1;
+const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+const cw = W / COLS;
+const ch = Math.round(cw * 1.45);
+const rows = Math.floor(H / ch);
+const simW = COLS * 2, simH = rows * 2;
+const N = simW * simH;
+
+const U = new Float32Array(N).fill(1);
+const V = new Float32Array(N);
+const U2 = new Float32Array(N), V2 = new Float32Array(N);
+
+const Du = 0.16, Dv = 0.08, F = 0.014, K = 0.054;
+// Seeds must be patches, not single cells: an isolated cell diffuses its V
+// away faster than the reaction can feed it, and the dish stays black.
+for (let k = 0; k < 40; k++) {
+  const cx = (rnd() * simW) | 0, cy = (rnd() * simH) | 0, rad = 4 + (rnd() * 6 | 0);
+  for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+    if (dx * dx + dy * dy > rad * rad) continue;
+    const i = ((cy + dy + simH) % simH) * simW + ((cx + dx + simW) % simW);
+    U[i] = 0.5; V[i] = 0.25;
+  }
+}
+
+function stepSim() {
+  const w = simW, h = simH;
+  for (let y = 0; y < h; y++) {
+    const up = ((y - 1 + h) % h) * w, dn = ((y + 1) % h) * w, row = y * w;
+    for (let x = 0; x < w; x++) {
+      const l = (x - 1 + w) % w, r = (x + 1) % w;
+      const i = row + x;
+      const u = U[i], v = V[i];
+      const lapU = (U[up + x] + U[dn + x] + U[row + l] + U[row + r]) * 0.2
+                 + (U[up + l] + U[up + r] + U[dn + l] + U[dn + r]) * 0.05 - u;
+      const lapV = (V[up + x] + V[dn + x] + V[row + l] + V[row + r]) * 0.2
+                 + (V[up + l] + V[up + r] + V[dn + l] + V[dn + r]) * 0.05 - v;
+      const uv2 = u * v * v;
+      U2[i] = u + (Du * lapU - uv2 + F * (1 - u));
+      V2[i] = v + (Dv * lapV + uv2 - (F + K) * v);
+    }
+  }
+  U.set(U2); V.set(V2);
+}
+
+try { Object.defineProperty(window, "devicePixelRatio", { get: () => 1 }); } catch {}
+const ctx = canvas.getContext("2d");
+const dpr = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = Math.round(W * dpr);
+canvas.height = Math.round(H * dpr);
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.font = `400 ${Math.round(ch * 0.92)}px "JetBrains Mono", monospace`;
+
+const RAMP = " .,:;+*x#%@";
+const LO = [18, 44, 52], HI = [150, 240, 225];
+
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let max = 0.05;
+  for (let i = 0; i < N; i++) if (V[i] > max) max = V[i];
+  const inv = 1 / max;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x0 = c * 2, y0 = r * 2;
+      const a = V[y0 * simW + x0], b = V[y0 * simW + x0 + 1];
+      const d = V[(y0 + 1) * simW + x0], e = V[(y0 + 1) * simW + x0 + 1];
+      const v = Math.max(a, b, d, e) * inv;
+      const t = Math.min(1, Math.pow(v, 0.75));
+      if (t < 0.05) continue;
+      const g = RAMP[Math.min(RAMP.length - 1, Math.floor(t * RAMP.length))];
+      ctx.fillStyle = `rgb(${LO[0] + (HI[0] - LO[0]) * t | 0},${LO[1] + (HI[1] - LO[1]) * t | 0},${LO[2] + (HI[2] - LO[2]) * t | 0})`;
+      ctx.fillText(g, c * cw + cw / 2, r * ch + ch / 2 + 1);
+    }
+  }
+}
+
+const STEP = 1 / 60;
+for (let t = 0; t < SETTLE; t += STEP) stepSim();
+log(`grid ${COLS}x${rows} cell ${cw.toFixed(1)}x${ch} sim ${simW}x${simH} sub ${SUB} dpr ${dpr}`);
+
+const frames = Math.max(1, Math.round(SEC * FPS));
+const per = Math.round(60 / FPS);
+const t0 = performance.now();
+for (let f = 0; f < frames; f++) {
+  for (let k = 0; k < per * SUB; k++) stepSim();
+  render();
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+  await fetch("/frame?i=" + f, { method: "POST", body: blob });
+}
+log(`rendered ${frames} frames in ${(performance.now() - t0).toFixed(0)}ms`);
+fetch("/done");
+</script>
+</body>
+</html>

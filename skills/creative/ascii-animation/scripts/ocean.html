@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Exports the site's ocean engine as frames: living boids, ASCII glyphs.
+     Serve the site root and pass ?engine=/static/js/ocean/index.js (default).
+
+       SITE_ROOT=~/dev/site ./capture.sh ocean.html \
+         "w=2560&h=1440&sec=20&fps=30&seed=11&settle=6" ~/lab/ocean -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  canvas { display: block; font-family: "JetBrains Mono", monospace; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const W = Number(q.get("w") ?? 2560);
+const H = Number(q.get("h") ?? 1440);
+const SEC = Number(q.get("sec") ?? 20);
+const FPS = Number(q.get("fps") ?? 30);
+const SETTLE = Number(q.get("settle") ?? 6);
+const SEED = Number(q.get("seed") ?? 11);
+const FISH = Number(q.get("fish") ?? 620);
+const ENGINE = q.get("engine") ?? "/static/js/ocean/index.js";
+
+const log = (m) => fetch("/log", { method: "POST", body: m });
+const canvas = document.getElementById("c");
+try { Object.defineProperty(window, "devicePixelRatio", { get: () => 1 }); } catch {}
+canvas.style.width = W + "px";
+canvas.style.height = H + "px";
+
+const { OceanEngine } = await import(ENGINE);
+await document.fonts.load('600 16px "JetBrains Mono"');
+await document.fonts.ready;
+
+const engine = new OceanEngine(canvas, [
+  { kind: "zander", size: 1 },
+  { kind: "zander", size: 0.86 },
+  { kind: "zander", size: 0.74 },
+  { kind: "zander", size: 0.92 },
+], { seed: SEED, fishCount: FISH });
+
+engine.destroy(); // the rAF loop is timing-dependent; drive the sim by hand instead
+
+const STEP = 1 / 60;
+for (let t = 0; t < SETTLE; t += STEP) engine.world.step(STEP);
+log(`grid ${engine.renderer.cols}x${engine.renderer.rows} cell ${engine.renderer.cw}x${engine.renderer.ch} dpr ${engine.renderer.dpr}`);
+
+const frames = Math.max(1, Math.round(SEC * FPS));
+const per = Math.round(60 / FPS);
+const t0 = performance.now();
+for (let f = 0; f < frames; f++) {
+  for (let k = 0; k < per; k++) engine.world.step(STEP);
+  engine.renderer.render(engine.world, per * STEP);
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+  await fetch("/frame?i=" + f, { method: "POST", body: blob });
+}
+log(`rendered ${frames} frames in ${(performance.now() - t0).toFixed(0)}ms`);
+fetch("/done");
+</script>
+</body>
+</html>

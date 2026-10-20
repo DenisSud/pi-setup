@@ -55,8 +55,8 @@ cache of `origin/main` and pi deletes anything not pushed.
 ### Skills
 
 `skills/` holds the skills the agent discovers: `engineering/`,
-`productivity/`, and tool skills at the top level (`agent-browser`,
-`memory-consolidation`, …).
+`productivity/`, `creative/`, and tool skills at the top level
+(`agent-browser`, `memory-consolidation`, …).
 Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
 the vault itself: `~/Documents/Notes/.pi/skills/`.
 Each skill is a directory with a `SKILL.md` whose frontmatter decides when it
