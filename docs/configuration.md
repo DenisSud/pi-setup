@@ -20,6 +20,9 @@ One file per concern, the same shape pi uses for `settings.json`, `mcp.json`,
 | `auth.json` | pi | provider API keys and OAuth tokens — written by `/login` and `pi auth`; extensions never touch it |
 | `mcp-auth.json` | pi | MCP OAuth tokens |
 
+Not a file: `PI_TOOL_EXPOSURE` (below) is read from the environment by every
+extension through `lib/exposure.ts`.
+
 Extensions never import each other's config module, and they never read each
 other's file. What two extensions share — the credential variables — lives in
 `env.json`, the one file both the extensions and the shell read.
@@ -69,6 +72,28 @@ name. That is why the calendar's agent credentials are `RADICALE_AGENT_USER` and
 Values are per device and are not in git. Bitwarden (folder `pi`) holds the
 originals, and `~/.pi/agent/security.json.retired` lists which item each
 variable came from.
+
+## Tool exposure
+
+`PI_TOOL_EXPOSURE` decides how much of each tool this package registers the
+model sees. `lib/exposure.ts` reads it; unset means `direct`, which is pi's
+own default.
+
+| value | effect |
+|---|---|
+| `direct` | declared in every request: description and guidelines are prompt cost |
+| `codemode` | callable as `tools.<name>(…)` in a script, listed in the codemode description |
+| `deferred` | callable from a script, not listed anywhere; `searchTools()`/`ALL_TOOLS` find it |
+| `hidden` | registered and unreachable |
+
+It is one variable rather than a key in each extension's config file because it
+is a property of the whole session: the [minimal profile](minimal.md) runs every
+tool the same way, and one value cannot drift across four files. Service
+settings stay in `gmail.json`, `calendar.json` and `mem0.json`.
+
+A new tool in this package passes `exposure: toolExposure()`. A tool that
+activates itself with `pi.setActiveTools()` must skip that when the exposure is
+not `direct`, or it declares itself anyway (`extensions/mem0` does this).
 
 ## Extension files in detail
 

@@ -68,3 +68,37 @@ across them invents a hidden dependency that the host does not know about.
 Shared code belongs in `lib/` (or a shared npm package once it outgrows this
 repo); shared *data* belongs in a file like `env.json` that each extension reads
 on its own.
+
+## The minimal profile trades discovery for prompt size (2026-10)
+
+The daily prompt carried 32 skill entries (~7.8k characters) and 26 declared
+tools (~33k characters), so a one-word question cost ~11.3k input tokens before
+the conversation started. On any single turn almost none of it is used: the
+skill list is routing for a model that already has the request, and the calendar
+and mail descriptions are only needed once the task is about calendar or mail.
+
+The minimal profile moves both lists out of the prompt:
+
+- **Skills** are invoked as `/skill:<name>` and carry
+  `disable-model-invocation: true`, so pi does not advertise them. The command
+  still expands the file with its `location`, so nothing else changes.
+- **Tools** register with `exposure: "deferred"` (`PI_TOOL_EXPOSURE`), which
+  keeps them callable as `tools.<name>(…)` from a codemode script and out of
+  both the request and the codemode description. `searchTools()` and
+  `ALL_TOOLS` still find them.
+
+Why not an MCP server per tool: with `codemode` exposure an MCP server reaches
+the same place, but every server also adds a line to the `mcp_servers` section
+of the system prompt, and wrapping the existing TypeScript tools would add an
+MCP SDK dependency and a second process for each. Extensions already have the
+`exposure` hook, so the profile is a variable, not a rewrite.
+
+Why one environment variable instead of a key in each extension's config: the
+choice is per session, not per service. Four files would let the profile drift
+into a half-declared state, and a typo there would look minimal while still
+paying the prompt.
+
+The price is explicit: the agent no longer suggests a skill or remembers that a
+calendar exists. The user, a skill body, or a `searchTools()` call has to name
+the tool. That is the point of the trial — the router moves from the prompt to
+the skill.

@@ -64,6 +64,17 @@ Each skill is a directory with a `SKILL.md` whose frontmatter names it and
 describes it. Every skill here sets `disable-model-invocation: true`: it is
 invoked with `/skill:<name>` and never advertised to the model.
 
+### Minimal profile
+
+`minimal/` installs a trial profile in `~/.pi/minimal` — six-line system
+prompt, five declared tools, everything else reachable only from a `codemode`
+script. From /tmp the request cost drops from ~11.3k to ~1.7k input tokens.
+See [docs/minimal.md](docs/minimal.md).
+
+```sh
+./minimal/install.sh && ~/.pi/minimal/pi
+```
+
 ## Conventions
 
 - **One config file per extension**, in the agent dir: `env.json`, `mem0.json`,

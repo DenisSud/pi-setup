@@ -41,5 +41,6 @@ know before touching it.
 | `extensions/<name>/test/` | harness (`run.sh harness`) and live variant |
 | `lib/` | code shared by several extensions (`audit.ts`, `credentials.ts`, `exposure.ts`) |
 | `skills/<group>/<name>/SKILL.md` | skills, discovered through their frontmatter |
-| `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [design notes](docs/design-notes.md) |
+| `minimal/` | the trial profile: `SYSTEM.md` template and `install.sh` for `~/.pi/minimal` |
+| `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [minimal profile](docs/minimal.md), [design notes](docs/design-notes.md) |
 | `package.json` | declares `./extensions` and `./skills`; peer deps come from the host |
