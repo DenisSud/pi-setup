@@ -106,3 +106,23 @@ paying the prompt.
 The price is explicit: the agent no longer suggests a skill or remembers that a
 calendar exists. The user, a skill body, or a `searchTools()` call has to name
 the tool. That is the point — the router moved from the prompt to the skill.
+
+## Subagents: a fork, not a config line (2026-10)
+
+`pi-subagents` registers `subagent` with `exposure: "model-only"`: declared to
+the model, not callable from a codemode script. Neither lever in settings
+reaches that: `-subagent` also removes it from codemode (`tools.subagent` is
+`undefined`), and the package exposes no exposure setting. So the package is
+forked (`DenisSud/pi-subagents`, branch `pi-setup`, upstream `v0.80.0`) and the
+parent-facing registrations take `SCRIPT_ONLY_TOOL` — `deferred` — while
+child-session registrations keep `model-only`, because a child's prompt is its
+own.
+
+Why not a wrapper extension that proxies `registerTool` and rewrites
+`exposure`: it would sit on pi's API identity, break the package's declaration
+pinning, and make every upstream change a guessing game. A three-file diff in
+a fork is easier to rebase than a proxy is to trust.
+
+The cost is real and accepted: the fork tracks upstream by hand. Rebase the
+branch onto a new tag, keep the `SCRIPT_ONLY_TOOL` replacements, push, `pi
+update --extensions`.

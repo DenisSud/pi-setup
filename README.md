@@ -82,7 +82,7 @@ A device matches that shape with three things in `~/.pi/agent`:
 |---|---|
 | `SYSTEM.md` → symlink into this checkout | the prompt is versioned here, so a push plus `pi update` changes it with no copy step |
 | `settings.json` → `"defaultTools": ["+codemode"]` | codemode is opt-in in pi; without it there is no way to reach the tools |
-| `settings.json` → `"packages"` | this package only — a package that declares its own tools (`pi-web-access`, `pi-subagents`) puts them straight back into the prompt |
+| `settings.json` → `"packages"` | only packages whose tools are script-only: this one, and the `pi-subagents` fork below |
 
 ```sh
 ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/SYSTEM.md ~/.pi/agent/SYSTEM.md
@@ -95,6 +95,26 @@ codemode description instead.
 The trade is explicit: the agent does not suggest a skill, and nothing in the
 prompt says a calendar exists. The user, a skill body, or a `searchTools()`
 call has to name the tool.
+
+### Subagents come from a fork
+
+`subagent`, `bg_wait`, `subagent_supervisor` and `contact_supervisor` come from
+[DenisSud/pi-subagents](https://github.com/DenisSud/pi-subagents), branch
+`pi-setup`: upstream `v0.80.0` plus one patch. Upstream registers those tools
+with `exposure: "model-only"` — declared to the model, invisible to a codemode
+script. `model-only` becomes `deferred`, the activation helpers stop activating
+script-only tools (naming one in `setActiveTools()` would only declare it), and
+its two skills carry `disable-model-invocation: true` so `/skill:council-mode`
+still works.
+
+No setting can do this: `-subagent` removes the tool from codemode too
+(`tools.subagent` is then undefined), and the package has no exposure knob.
+Hence a fork rather than a config line. Child agents still get declared tools —
+only the parent-facing registrations changed.
+
+To follow a new upstream release: rebase `pi-setup` onto the new tag, keep the
+`SCRIPT_ONLY_TOOL` replacements, push, then `pi update --extensions` on each
+device.
 
 ## Conventions
 

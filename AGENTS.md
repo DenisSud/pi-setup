@@ -25,6 +25,12 @@ know before touching it.
   in the request. A tool that calls `pi.setActiveTools()` on itself must skip
   that when the exposure is not `direct`. See
   [docs/configuration.md](docs/configuration.md#tool-exposure).
+- **Subagent tools come from a fork**, not upstream: `git:github.com/DenisSud/pi-subagents@pi-setup`
+  is `v0.80.0` with `exposure: "deferred"` (its `SCRIPT_ONLY_TOOL`) on the
+  parent-facing registrations, so a script reaches them and the prompt does not.
+  Never install `npm:pi-subagents` — upstream's `model-only` exposure declares
+  `subagent` in every request and hides it from codemode. Upgrade by rebasing
+  the branch onto the new upstream tag. See [README.md](README.md#subagents-come-from-a-fork).
 - **Skills are user-invoked**: every `SKILL.md` sets
   `disable-model-invocation: true`. A skill that must fire on its own drops
   that line, and the reason belongs in the same commit.
