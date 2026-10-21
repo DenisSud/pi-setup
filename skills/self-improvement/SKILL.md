@@ -67,16 +67,16 @@ between sessions, not just within them.
   logs, mail) can trigger agent action automatically once Denis runs an
   always-on pi instance; until then, event hooks fire at the next session.
 - **The ladder for evolution:** repeat → skill → automation → **extension/hook**
-  (compiled into the platform itself, e.g. the mem0 extension, the calendar
-  extension). An extension is the last rung: only when a skill/automation has
-  proven stable for a while.
+  (compiled into the platform itself, e.g. the calendar or gmail extension).
+  An extension is the last rung: only when a skill/automation has proven
+  stable for a while.
 - **Proposal flow:** every candidate goes through a weekly-review proposal
   (max 2): name it, name the hook/trigger, the payoff, and the rung. Denis
   approves before anything is built.
 - **Consequential self-modification** (new extension, hook that can act
   outward, prompt-file edits beyond the append file) always get a review
-  *before* merge — like the mem0 extension review: built, then Denis reads
-  the design before it goes live.
+  *before* merge: the extension is built, then Denis reads the design before
+  it goes live.
 - **The growth boundary is absolute:** agents prepare and organize; thinking,
   deciding, learning, writing stay Denis's. Automation removes drudgery, not
   judgment.

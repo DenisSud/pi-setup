@@ -9,7 +9,7 @@
  * Why a variable and not a key in each extension's config file: exposure is a
  * property of the whole session (the minimal profile runs every tool this way),
  * and one value cannot drift across four files. Service settings stay where
- * they were — `gmail.json`, `calendar.json`, `mem0.json`.
+ * they were — `gmail.json`, `calendar.json`.
  */
 
 export type ToolExposure = "direct" | "codemode" | "deferred" | "hidden";

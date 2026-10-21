@@ -41,7 +41,6 @@ cache of `origin/main` and pi deletes anything not pushed.
 |---|---|
 | `env` | loads `~/.pi/agent/env.json` into `process.env` at startup (names-only `/env` command) |
 | `web-search` | `web_search` (SearXNG) — source discovery only; reading pages is curl or the `agent-browser` skill |
-| `mem0` | semantic memory: auto-recall + batched auto-capture + `mem0_memory` tool |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 
@@ -57,7 +56,7 @@ cache of `origin/main` and pi deletes anything not pushed.
 
 `skills/` holds the skills the agent discovers: `engineering/`,
 `productivity/`, `creative/`, and tool skills at the top level
-(`agent-browser`, `memory-consolidation`, …).
+(`agent-browser`, `ascii-animation`, …).
 Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
 the vault itself: `~/Documents/Notes/.pi/skills/`.
 Each skill is a directory with a `SKILL.md` whose frontmatter names it and
@@ -77,8 +76,8 @@ See [docs/minimal.md](docs/minimal.md).
 
 ## Conventions
 
-- **One config file per extension**, in the agent dir: `env.json`, `mem0.json`,
-  `gmail.json`, `calendar.json`. Extensions never add keys to `settings.json`;
+- **One config file per extension**, in the agent dir: `env.json`, `gmail.json`,
+  `calendar.json`. Extensions never add keys to `settings.json`;
   `auth.json` belongs to pi's providers. Details:
   [docs/configuration.md](docs/configuration.md).
 - **Credentials are plain environment variables** in `~/.pi/agent/env.json`
@@ -91,7 +90,6 @@ See [docs/minimal.md](docs/minimal.md).
 | file | for |
 |---|---|
 | `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; path override `PI_ENV_CONFIG`) |
-| `~/.pi/agent/mem0.json` | mem0 server URL, `apiKeyVar`, namespace, capture/recall knobs |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
 | `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages |
@@ -114,7 +112,6 @@ package-refresh behaviour, and how to add an extension.
 | symptom | cause and fix |
 |---|---|
 | `X not set — add it to ~/.pi/agent/env.json` | variable missing from `env.json`; add it, then `/reload` |
-| `Mem0 init failed: … invalid JSON` | `mem0.json` is malformed; fix it, then `/reload` |
 | `web_search: cannot reach SearXNG` | the local SearXNG service is down (`services.searx`) |
 | a skill or edit disappeared from this checkout | the package refresh reset it; see [AGENTS.md](AGENTS.md) — commit and push |
 | `rbw` fails with `Inappropriate ioctl for device` | nothing in this package uses it any more; the diagnosis is in [docs/design-notes.md](docs/design-notes.md) |

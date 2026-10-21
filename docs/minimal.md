@@ -15,7 +15,7 @@ It lives in its own agent directory (`~/.pi/minimal`), so the daily setup in
 | declared tools | 26 | `read`, `bash`, `edit`, `write`, `codemode` |
 | package tools | `direct` | `deferred` (`PI_TOOL_EXPOSURE`) |
 | skills | 32 advertised | 32, none advertised |
-| other packages | `pi-web-access`, `pi-subagents`, mem0, … | none |
+| other packages | `pi-web-access`, `pi-subagents`, … | none |
 
 `deferred` is the quietest exposure pi has: the tool is callable from a
 codemode script (`tools.email_search({…})`) but is not declared in the request
@@ -82,8 +82,8 @@ tools.
   user, or a `searchTools()` call has to put the name in front of the model.
 - **Prompt guidelines.** `promptGuidelines` on undeclared tools never reach the
   model (they are still visible through `describeTool`).
-- **Memory and subagents.** mem0's auto-recall/auto-capture and `subagent` are
-  out of the profile: both add prompt or context on their own.
+- **Subagents.** `subagent` is out of the profile: it adds a tool and a
+  delegation vocabulary the prompt does not carry.
 - **Pi docs pointers.** `SYSTEM.md` replaces pi's preamble, and with it the
   built-in `tools`, `rules` and `docs` sections. Ask for pi docs by path when
   you need them.

@@ -13,7 +13,6 @@ One file per concern, the same shape pi uses for `settings.json`, `mcp.json`,
 | file | owner | contents |
 |---|---|---|
 | `env.json` | `env` extension | environment variables: service keys, passwords, anything the shell needs |
-| `mem0.json` | `mem0` extension | server URL and memory behaviour |
 | `gmail.json` | `gmail` extension | address and IMAP connection facts |
 | `calendar.json` | `calendar` extension | CalDAV URL, collection, credential variable names |
 | `settings.json` | pi | model, theme, packages. Extensions do not add keys here. |
@@ -59,8 +58,7 @@ every `bash` command inherits it and every extension can read it with
 
 1. Put the value in `env.json` under an `UPPER_SNAKE` name.
 2. Reference the name from the consumer: `passwordVar`/`userVar` in
-   `calendar.json`, `passwordVar` in `gmail.json`, `apiKeyVar` in
-   `mem0.json`, or `$NAME` in a bash command.
+   `calendar.json`, `passwordVar` in `gmail.json`, or `$NAME` in a bash command.
 3. `/reload` (or restart pi) and check with `/env`, or run the extension's
    harness `live` variant.
 
@@ -89,18 +87,14 @@ own default.
 It is one variable rather than a key in each extension's config file because it
 is a property of the whole session: the [minimal profile](minimal.md) runs every
 tool the same way, and one value cannot drift across four files. Service
-settings stay in `gmail.json`, `calendar.json` and `mem0.json`.
+settings stay in `gmail.json` and `calendar.json`.
 
 A new tool in this package passes `exposure: toolExposure()`. A tool that
 activates itself with `pi.setActiveTools()` must skip that when the exposure is
-not `direct`, or it declares itself anyway (`extensions/mem0` does this).
+not `direct`, or it declares itself anyway.
 
 ## Extension files in detail
 
-- `mem0.json` — every key is documented in
-  [extensions/mem0/README.md](../extensions/mem0/README.md#configuration). The
-  file is optional: on the fleet, `MEM0_BASE_URL`, `MEM0_API_KEY` and friends
-  come from the environment instead.
 - `gmail.json` — `username` (required) plus optional `host`, `port` (default
   `imap.gmail.com:993`), `passwordVar` (default `GMAIL_APP_PASSWORD`),
   `auditLog`, `maxBodyChars`, `attachmentDir`. `GMAIL_CONFIG` overrides the path.

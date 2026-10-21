@@ -30,7 +30,7 @@ know before touching it.
 - **Every extension carries its harness** at `extensions/<name>/test/run.sh`.
   A change is done when `harness` passes for every extension it touched, and
   `live` too when the change touches credentials or the network path.
-- **Commit messages**: `<scope>: <subject>` — `env:`, `mem0:`, `calendar:`,
+- **Commit messages**: `<scope>: <subject>` — `env:`, `gmail:`, `calendar:`,
   `skills:`, `pi-setup:` (`git log` shows the style).
 
 ## Layout
