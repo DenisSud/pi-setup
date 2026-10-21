@@ -34,6 +34,10 @@ know before touching it.
 - **Skills are user-invoked**: every `SKILL.md` sets
   `disable-model-invocation: true`. A skill that must fire on its own drops
   that line, and the reason belongs in the same commit.
+- **Model binaries are Nix packages**: an extension that needs a model runs a
+  CLI built by `flake.nix` from `PATH` (configurable in its own agent-dir file,
+  e.g. `ocr.json`), never a pip/venv install. Models download at runtime into
+  the Hugging Face cache.
 - **Every extension carries its harness** at `extensions/<name>/test/run.sh`.
   A change is done when `harness` passes for every extension it touched, and
   `live` too when the change touches credentials or the network path.
@@ -51,3 +55,4 @@ know before touching it.
 | `SYSTEM.md` | the prompt; devices symlink it into `~/.pi/agent` |
 | `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [design notes](docs/design-notes.md) |
 | `package.json` | declares `./extensions` and `./skills`; peer deps come from the host |
+| `flake.nix`, `nix/` | model binaries the extensions shell out to (`indra-ocr`); bump the input tag, rebuild, reinstall on each device |

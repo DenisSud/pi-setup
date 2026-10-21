@@ -98,6 +98,9 @@ not `direct`, or it declares itself anyway.
 - `gmail.json` — `username` (required) plus optional `host`, `port` (default
   `imap.gmail.com:993`), `passwordVar` (default `GMAIL_APP_PASSWORD`),
   `auditLog`, `maxBodyChars`, `attachmentDir`. `GMAIL_CONFIG` overrides the path.
+- `ocr.json` — optional throughout: `command` (default `indra-ocr`), `timeoutMs`
+  (default 300000), `maxChars` (default 20000), `artifactDir` (default
+  `~/.pi/agent/tmp/ocr`). `OCR_CONFIG` overrides the path.
 - `calendar.json` — optional throughout: `baseUrl` (default
   `https://cal.sudakov.site`), `collection` (default `/denis/main/`), `userVar` /
   `passwordVar` (default the `RADICALE_AGENT_*` pair), `timezone` (default

@@ -1,0 +1,45 @@
+{
+  "nodes": {
+    "indra": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792460389,
+        "narHash": "sha256-/5dIpTEj5GDJvznLwmmASe1LgB6vUYa4Pgibe1sXw2A=",
+        "owner": "datalab-to",
+        "repo": "indra",
+        "rev": "0e96b93c6810f17cf8352acbb4487cc9e45b66d5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "datalab-to",
+        "ref": "v1.1.2",
+        "repo": "indra",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1792502884,
+        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "indra": "indra",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

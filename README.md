@@ -43,6 +43,7 @@ cache of `origin/main` and pi deletes anything not pushed.
 | `web-search` | `web_search` (SearXNG) — source discovery only; reading pages is curl or the `agent-browser` skill |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
+| `ocr` | `ocr`: PDF/image → markdown with Indra OCR, locally (Nix package, CPU, no network) |
 
 ### Lib
 
@@ -134,6 +135,24 @@ To follow a new upstream release: rebase `pi-setup` onto the new tag, keep the
 `SCRIPT_ONLY_TOOL` replacements, push, then `pi update --extensions` on each
 device.
 
+### Local models (Nix)
+
+Model binaries are Nix packages from this repo, so a device gets them the same
+way on every architecture without pip, a venv or a GPU. Indra OCR is packaged
+from source in [`nix/indra-ocr.nix`](nix/indra-ocr.nix) (nixpkgs' Python with
+onnxruntime, opencv4 and pypdfium2) and exposed through `flake.nix`:
+
+```sh
+nix profile install ~/dev/pi-setup#indra-ocr      # ~/.nix-profile/bin/indra-ocr
+nix run ~/dev/pi-setup#indra-ocr -- paper.pdf     # without installing
+```
+
+The models themselves download from Hugging Face on the first run (~76 MB,
+cached in `$XDG_CACHE_HOME/huggingface`). The `ocr` tool calls `indra-ocr` from
+`PATH`; `~/.pi/agent/ocr.json` can point `command` at a store path instead.
+Measured here: 2 s for a 30-page digital PDF, 5 s for a 1.2 MB scan, Russian and
+English text intact.
+
 ## Conventions
 
 - **One config file per extension**, in the agent dir: `env.json`, `gmail.json`,
@@ -151,6 +170,7 @@ device.
 |---|---|
 | `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; path override `PI_ENV_CONFIG`) |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
+| `~/.pi/agent/ocr.json` | optional; OCR binary name, timeout, output cap and artifact directory |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
 | `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions/lanes/remote machines off) |
 | `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages |
