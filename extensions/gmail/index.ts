@@ -12,6 +12,7 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { toolExposure } from "../../lib/exposure.ts";
 import {
 	attachmentList,
 	closeClient,
@@ -113,6 +114,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_search",
 		label: "Email Search",
+		exposure: toolExposure(),
 		description:
 			"Search Gmail with Gmail's own search syntax (from:, to:, subject:, is:unread, has:attachment, newer_than:7d, in:inbox, label:…). Searches All Mail by default, newest first, envelope only — no bodies. Page with date operators (before:2026/09/01) instead of a cursor. Returns ids for email_get_message.",
 		parameters: Type.Object({
@@ -139,6 +141,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_get_message",
 		label: "Email Read",
+		exposure: toolExposure(),
 		description:
 			"Read one email: headers, decoded text body (plain preferred, HTML converted to text) and attachment metadata. Pass the id from email_search. Bodies are capped at 20k characters (the truncated flag says so). No remote content is fetched; use email_get_attachment to download a file.",
 		parameters: Type.Object({
@@ -188,6 +191,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_get_thread",
 		label: "Email Thread",
+		exposure: toolExposure(),
 		description:
 			"List every message of a Gmail conversation (same thread id), oldest first, envelope only — no bodies. Pass the thread id from email_search and read individual messages with email_get_message.",
 		parameters: Type.Object({
@@ -211,6 +215,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_get_attachment",
 		label: "Email Attachment",
+		exposure: toolExposure(),
 		description:
 			"Download one attachment from a message to ~/Downloads/email-attachments/ and return its absolute path, MIME type and size. Pass the id from email_search; part is the part number listed by email_get_message (omit it when the message has exactly one attachment). Existing files are never overwritten.",
 		parameters: Type.Object({
@@ -247,6 +252,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_list_drafts",
 		label: "Email Drafts",
+		exposure: toolExposure(),
 		description: "List saved Gmail drafts, newest first, with the ids used by email_update_draft and email_delete_draft.",
 		parameters: Type.Object({
 			limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, description: "Max drafts (default 20)" })),
@@ -267,6 +273,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_create_draft",
 		label: "Email Draft New",
+		exposure: toolExposure(),
 		description:
 			"Create a Gmail draft with a plain-text body. It shows up in Gmail and on the phone right away; sending stays a human action — this tool cannot send mail. Pass in_reply_to (the Message-ID header of the message being answered) to keep the draft in the same conversation. Returns the new draft id.",
 		parameters: Type.Object({
@@ -302,6 +309,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_update_draft",
 		label: "Email Draft Edit",
+		exposure: toolExposure(),
 		description:
 			"Replace an existing draft: fields you pass override the stored ones, the others are kept as they are. Implemented as a new draft plus removal of the old one, so the returned id differs from the input id (update any stored id).",
 		parameters: Type.Object({
@@ -331,6 +339,7 @@ export default function gmailExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "email_delete_draft",
 		label: "Email Draft Delete",
+		exposure: toolExposure(),
 		description:
 			"Delete a draft. Drafts are the only messages this agent can delete — received and sent mail are untouchable. The deletion is written to the audit log before it happens.",
 		parameters: Type.Object({

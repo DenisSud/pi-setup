@@ -51,6 +51,7 @@ cache of `origin/main` and pi deletes anything not pushed.
 |---|---|
 | `lib/audit.ts` | append-only JSONL audit log (ring buffer) shared by calendar + gmail |
 | `lib/credentials.ts` | read required env vars, with an error that names the missing one |
+| `lib/exposure.ts` | `PI_TOOL_EXPOSURE`: how much of a tool the model sees (`direct` by default) |
 
 ### Skills
 

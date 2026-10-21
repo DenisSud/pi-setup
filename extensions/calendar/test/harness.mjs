@@ -333,6 +333,33 @@ test("all five calendar tools are registered", () => {
 	);
 });
 
+test("tools are declared by default and deferred under PI_TOOL_EXPOSURE", () => {
+	for (const tool of pi.tools.values()) assertEqual(tool.exposure, "direct");
+	process.env.PI_TOOL_EXPOSURE = "deferred";
+	try {
+		const other = makePi();
+		calendarExtension(other);
+		for (const tool of other.tools.values()) assertEqual(tool.exposure, "deferred");
+	} finally {
+		delete process.env.PI_TOOL_EXPOSURE;
+	}
+});
+
+test("an unknown PI_TOOL_EXPOSURE names the variable", () => {
+	process.env.PI_TOOL_EXPOSURE = "directt";
+	try {
+		let message = "";
+		try {
+			calendarExtension(makePi());
+		} catch (err) {
+			message = err instanceof Error ? err.message : String(err);
+		}
+		assert(message.includes("PI_TOOL_EXPOSURE"), `message names the variable: ${message}`);
+	} finally {
+		delete process.env.PI_TOOL_EXPOSURE;
+	}
+});
+
 test("list: sends an expanded time-range REPORT and formats the hits", async () => {
 	mockFetch((request) => {
 		assertEqual(request.method, "REPORT");

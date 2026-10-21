@@ -115,6 +115,33 @@ test("registers web_search and nothing else", () => {
 	assert(pi.tools.size === 1, `only one tool registered: ${[...pi.tools.keys()].join(", ")}`);
 });
 
+test("tools are declared by default and deferred under PI_TOOL_EXPOSURE", () => {
+	for (const tool of pi.tools.values()) assert(tool.exposure === "direct", `exposure: ${tool.exposure}`);
+	process.env.PI_TOOL_EXPOSURE = "deferred";
+	try {
+		const other = makePi();
+		createExtension(other);
+		for (const tool of other.tools.values()) assert(tool.exposure === "deferred", `exposure: ${tool.exposure}`);
+	} finally {
+		delete process.env.PI_TOOL_EXPOSURE;
+	}
+});
+
+test("an unknown PI_TOOL_EXPOSURE names the variable", () => {
+	process.env.PI_TOOL_EXPOSURE = "directt";
+	try {
+		let message = "";
+		try {
+			createExtension(makePi());
+		} catch (err) {
+			message = err instanceof Error ? err.message : String(err);
+		}
+		assert(message.includes("PI_TOOL_EXPOSURE"), `message names the variable: ${message}`);
+	} finally {
+		delete process.env.PI_TOOL_EXPOSURE;
+	}
+});
+
 // ── web_search ────────────────────────────────────────────────────────────
 
 test("search success → formatted results + details", async () => {

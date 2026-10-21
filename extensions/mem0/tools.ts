@@ -16,6 +16,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import { truncateHead, truncateLine } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
+import type { ToolExposure } from '../../lib/exposure.ts';
 import { formatRecalledMemory, redactMemoryText } from './privacy.ts';
 import type { Mem0Provider } from './provider.ts';
 import type { MemoryItem } from './types.ts';
@@ -54,6 +55,8 @@ export interface Mem0MemoryToolOptions {
    */
   isEnabled: () => boolean;
   topK?: number;
+  /** How the model reaches the tool; see `lib/exposure.ts`. */
+  exposure?: ToolExposure;
   /** Called after a successful write (add/delete) so the host can refresh its status. */
   onMemoryChanged?: () => void;
 }
@@ -97,6 +100,7 @@ export function createMem0MemoryTool(opts: Mem0MemoryToolOptions): ToolDefinitio
   return {
     name: 'mem0_memory',
     label: 'Mem0 Memory',
+    exposure: opts.exposure,
     description:
       'Read and manage long-term semantic memories about the user and their projects. ' +
       'Memories are facts extracted from past conversations, stored in Mem0.\n\n' +

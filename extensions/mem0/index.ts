@@ -32,6 +32,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { toolExposure } from '../../lib/exposure.ts';
 import { Capture, resolveCaptureConfig, type CaptureConfig } from './capture.ts';
 import { dedupProviderMemories } from './dedup.ts';
 import { Prefetch } from './prefetch.ts';
@@ -307,6 +308,7 @@ export default function mem0Extension(pi: ExtensionAPI): void {
         });
       }
       if (activeToolEnabled) {
+        const exposure = toolExposure();
         pi.registerTool(
           createMem0MemoryTool({
             getProvider: () => provider,
@@ -314,15 +316,20 @@ export default function mem0Extension(pi: ExtensionAPI): void {
             getAgentId: () => agentId,
             isEnabled: () => activeToolEnabled,
             topK,
+            exposure,
             onMemoryChanged: () => {
               void refreshMemoryStatus();
             },
           }),
         );
-        pi.setActiveTools([
-          ...pi.getActiveTools().filter((name) => name !== MEMORY_TOOL_NAME),
-          MEMORY_TOOL_NAME,
-        ]);
+        // A deferred tool is reachable from codemode without being declared;
+        // activating it here would declare it again and undo the exposure.
+        if (exposure === 'direct') {
+          pi.setActiveTools([
+            ...pi.getActiveTools().filter((name) => name !== MEMORY_TOOL_NAME),
+            MEMORY_TOOL_NAME,
+          ]);
+        }
       }
     } catch (err) {
       if (epoch !== sessionEpoch) return;

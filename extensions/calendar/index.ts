@@ -14,6 +14,7 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { toolExposure } from "../../lib/exposure.ts";
 import {
 	auditLog,
 	calendarConfig,
@@ -108,6 +109,7 @@ export default function calendarExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "calendar_list_events",
 		label: "Calendar List",
+		exposure: toolExposure(),
 		description:
 			"List events in Denis's personal calendar (cal.sudakov.site) between two times, ordered by start. Recurring events are expanded by the server, so each occurrence appears separately. Returns uid + etag for follow-up calls. Use it to answer \"what's on my calendar\" questions and before creating an event.",
 		parameters: Type.Object({
@@ -139,6 +141,7 @@ export default function calendarExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "calendar_get_event",
 		label: "Calendar Read",
+		exposure: toolExposure(),
 		description: "Read one event of Denis's personal calendar by uid: times, location, description, recurrence rule and the etag needed for an update.",
 		parameters: Type.Object({ uid: UID }),
 		...renderer("Calendar Read", (details) => String(details.summary ?? "event")),
@@ -156,6 +159,7 @@ export default function calendarExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "calendar_create_event",
 		label: "Calendar Create",
+		exposure: toolExposure(),
 		description:
 			"Create an event in Denis's personal calendar. Times are stored in UTC; pass local Moscow times or RFC3339 with an offset. All-day events use plain dates (end date is exclusive). Recurrence is supported by passing an RRULE (e.g. FREQ=WEEKLY;BYDAY=MO), and reminders by passing how many minutes before the start to notify (the phone/laptop calendar app fires them). No attendees — that field is not part of this calendar. Returns the new event's uid.",
 		parameters: Type.Object({
@@ -192,6 +196,7 @@ export default function calendarExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "calendar_update_event",
 		label: "Calendar Update",
+		exposure: toolExposure(),
 		description:
 			"Change an existing event: fields you pass replace the stored ones, the rest stay. Read the event first (calendar_get_event) so the etag is current — the update is rejected if someone else changed it in the meantime. Recurring series are updated as a whole (single instances are not editable); reminders carry over unless you pass new ones (`reminders: []` removes them).",
 		parameters: Type.Object({
@@ -228,6 +233,7 @@ export default function calendarExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "calendar_delete_event",
 		label: "Calendar Delete",
+		exposure: toolExposure(),
 		description:
 			"Delete an event from Denis's personal calendar. A full copy of the event is written to the audit log first, so an accidental delete can be recovered by hand. Confirm with Denis before deleting anything you did not create yourself.",
 		parameters: Type.Object({ uid: UID }),

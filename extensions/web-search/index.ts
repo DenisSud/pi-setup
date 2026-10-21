@@ -23,6 +23,7 @@
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { toolExposure } from "../../lib/exposure.ts";
 
 const DEFAULT_SEARX_BASE = "http://127.0.0.1:8888";
 const SEARCH_TIMEOUT_MS = 20_000;
@@ -147,6 +148,7 @@ export default function webSearchExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
+		exposure: toolExposure(),
 		description:
 			"Search the web for current information using a local SearXNG instance. Returns source links with titles and snippets — discovery only, it does not fetch pages. Use it for current events, docs lookups, and anything past your knowledge cutoff, then read the promising sources with curl (static HTML/JSON) or the agent-browser skill (JS-rendered or interactive pages).",
 		promptGuidelines: [

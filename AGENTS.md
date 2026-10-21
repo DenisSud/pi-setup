@@ -19,6 +19,11 @@ know before touching it.
   to pi's providers. See [docs/configuration.md](docs/configuration.md).
 - **Extensions stay independent**: no imports across `extensions/*`. Shared code
   lives in `lib/` (and a shared npm package if it ever outgrows this repo).
+- **A tool's exposure comes from `lib/exposure.ts`**: every `registerTool` in
+  this package passes `exposure: toolExposure()`, so `PI_TOOL_EXPOSURE` can
+  take the whole package out of the prompt. A tool that calls
+  `pi.setActiveTools()` on itself must skip that when the exposure is not
+  `direct`. See [docs/minimal.md](docs/minimal.md).
 - **Every extension carries its harness** at `extensions/<name>/test/run.sh`.
   A change is done when `harness` passes for every extension it touched, and
   `live` too when the change touches credentials or the network path.
@@ -31,7 +36,7 @@ know before touching it.
 |---|---|
 | `extensions/<name>/index.ts` | the extension factory pi calls |
 | `extensions/<name>/test/` | harness (`run.sh harness`) and live variant |
-| `lib/` | code shared by several extensions (`audit.ts`, `credentials.ts`) |
+| `lib/` | code shared by several extensions (`audit.ts`, `credentials.ts`, `exposure.ts`) |
 | `skills/<group>/<name>/SKILL.md` | skills, discovered through their frontmatter |
 | `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [design notes](docs/design-notes.md) |
 | `package.json` | declares `./extensions` and `./skills`; peer deps come from the host |
