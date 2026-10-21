@@ -50,7 +50,7 @@ cache of `origin/main` and pi deletes anything not pushed.
 |---|---|
 | `lib/audit.ts` | append-only JSONL audit log (ring buffer) shared by calendar + gmail |
 | `lib/credentials.ts` | read required env vars, with an error that names the missing one |
-| `lib/exposure.ts` | `PI_TOOL_EXPOSURE`: how much of a tool the model sees (`direct` by default) |
+| `lib/exposure.ts` | `PI_TOOL_EXPOSURE`: how much of a tool the model sees (`deferred` by default) |
 
 ### Skills
 
@@ -63,16 +63,38 @@ Each skill is a directory with a `SKILL.md` whose frontmatter names it and
 describes it. Every skill here sets `disable-model-invocation: true`: it is
 invoked with `/skill:<name>` and never advertised to the model.
 
-### Minimal profile
+### Prompt and tool set
 
-`minimal/` installs a trial profile in `~/.pi/minimal` — six-line system
-prompt, five declared tools, everything else reachable only from a `codemode`
-script. From /tmp the request cost drops from ~11.3k to ~1.7k input tokens.
-See [docs/minimal.md](docs/minimal.md).
+The package is built to keep the request small. Nothing here is declared to
+the model: every tool registers with `exposure: "deferred"`, so it is reachable
+as `tools.<name>(…)` inside a `codemode` script and appears neither in the
+request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
+it when the name is unknown). Skills carry `disable-model-invocation: true`, so
+`/skill:<name>` loads one and none is advertised. `SYSTEM.md` in this repo is
+the prompt.
+
+Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
+against ~11.3k for a prompt that declares 26 tools and lists 32 skills.
+
+A device matches that shape with three things in `~/.pi/agent`:
+
+| what | why |
+|---|---|
+| `SYSTEM.md` → symlink into this checkout | the prompt is versioned here, so a push plus `pi update` changes it with no copy step |
+| `settings.json` → `"defaultTools": ["+codemode"]` | codemode is opt-in in pi; without it there is no way to reach the tools |
+| `settings.json` → `"packages"` | this package only — a package that declares its own tools (`pi-web-access`, `pi-subagents`) puts them straight back into the prompt |
 
 ```sh
-./minimal/install.sh && ~/.pi/minimal/pi
+ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/SYSTEM.md ~/.pi/agent/SYSTEM.md
 ```
+
+`PI_TOOL_EXPOSURE=direct pi` declares every tool of this package in the request
+for a session that should not need a script; `codemode` lists them in the
+codemode description instead.
+
+The trade is explicit: the agent does not suggest a skill, and nothing in the
+prompt says a calendar exists. The user, a skill body, or a `searchTools()`
+call has to name the tool.
 
 ## Conventions
 

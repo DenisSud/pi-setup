@@ -69,15 +69,20 @@ Shared code belongs in `lib/` (or a shared npm package once it outgrows this
 repo); shared *data* belongs in a file like `env.json` that each extension reads
 on its own.
 
-## The minimal profile trades discovery for prompt size (2026-10)
+## The package trades discovery for prompt size (2026-10)
 
-The daily prompt carried 32 skill entries (~7.8k characters) and 26 declared
-tools (~33k characters), so a one-word question cost ~11.3k input tokens before
-the conversation started. On any single turn almost none of it is used: the
-skill list is routing for a model that already has the request, and the calendar
-and mail descriptions are only needed once the task is about calendar or mail.
+The prompt carried 32 skill entries (~7.8k characters) and 26 declared tools
+(~33k characters), so a one-word question cost ~11.3k input tokens before the
+conversation started. On any single turn almost none of it is used: the skill
+list is routing for a model that already has the request, and the calendar and
+mail descriptions are only needed once the task is about calendar or mail.
 
-The minimal profile moves both lists out of the prompt:
+It started as a separate trial profile in `~/.pi/minimal`. The numbers held, so
+the behaviour moved into the package: `deferred` is now the exposure default,
+`SYSTEM.md` lives in this repo, and a device needs only
+`defaultTools: ["+codemode"]`. No second agent dir, no wrapper to remember.
+
+Both lists moved out of the prompt:
 
 - **Skills** are invoked as `/skill:<name>` and carry
   `disable-model-invocation: true`, so pi does not advertise them. The command
@@ -100,5 +105,4 @@ paying the prompt.
 
 The price is explicit: the agent no longer suggests a skill or remembers that a
 calendar exists. The user, a skill body, or a `searchTools()` call has to name
-the tool. That is the point of the trial — the router moves from the prompt to
-the skill.
+the tool. That is the point — the router moved from the prompt to the skill.

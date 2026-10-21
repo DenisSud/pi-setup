@@ -383,13 +383,13 @@ test("all eight email tools are registered", () => {
 	);
 });
 
-test("tools are declared by default and deferred under PI_TOOL_EXPOSURE", () => {
-	for (const tool of pi.tools.values()) assertEqual(tool.exposure, "direct");
-	process.env.PI_TOOL_EXPOSURE = "deferred";
+test("tools are deferred by default and declared under PI_TOOL_EXPOSURE=direct", () => {
+	for (const tool of pi.tools.values()) assertEqual(tool.exposure, "deferred");
+	process.env.PI_TOOL_EXPOSURE = "direct";
 	try {
 		const other = makePi();
 		gmailExtension(other);
-		for (const tool of other.tools.values()) assertEqual(tool.exposure, "deferred");
+		for (const tool of other.tools.values()) assertEqual(tool.exposure, "direct");
 	} finally {
 		delete process.env.PI_TOOL_EXPOSURE;
 	}

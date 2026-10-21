@@ -20,10 +20,11 @@ know before touching it.
 - **Extensions stay independent**: no imports across `extensions/*`. Shared code
   lives in `lib/` (and a shared npm package if it ever outgrows this repo).
 - **A tool's exposure comes from `lib/exposure.ts`**: every `registerTool` in
-  this package passes `exposure: toolExposure()`, so `PI_TOOL_EXPOSURE` can
-  take the whole package out of the prompt. A tool that calls
-  `pi.setActiveTools()` on itself must skip that when the exposure is not
-  `direct`. See [docs/minimal.md](docs/minimal.md).
+  this package passes `exposure: toolExposure()`. The default is `deferred`
+  (script-only, out of the prompt); `PI_TOOL_EXPOSURE=direct` declares the tools
+  in the request. A tool that calls `pi.setActiveTools()` on itself must skip
+  that when the exposure is not `direct`. See
+  [docs/configuration.md](docs/configuration.md#tool-exposure).
 - **Skills are user-invoked**: every `SKILL.md` sets
   `disable-model-invocation: true`. A skill that must fire on its own drops
   that line, and the reason belongs in the same commit.
@@ -41,6 +42,6 @@ know before touching it.
 | `extensions/<name>/test/` | harness (`run.sh harness`) and live variant |
 | `lib/` | code shared by several extensions (`audit.ts`, `credentials.ts`, `exposure.ts`) |
 | `skills/<group>/<name>/SKILL.md` | skills, discovered through their frontmatter |
-| `minimal/` | the trial profile: `SYSTEM.md` template and `install.sh` for `~/.pi/minimal` |
-| `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [minimal profile](docs/minimal.md), [design notes](docs/design-notes.md) |
+| `SYSTEM.md` | the prompt; devices symlink it into `~/.pi/agent` |
+| `docs/` | [configuration](docs/configuration.md), [development](docs/development.md), [design notes](docs/design-notes.md) |
 | `package.json` | declares `./extensions` and `./skills`; peer deps come from the host |

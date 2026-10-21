@@ -74,20 +74,20 @@ variable came from.
 ## Tool exposure
 
 `PI_TOOL_EXPOSURE` decides how much of each tool this package registers the
-model sees. `lib/exposure.ts` reads it; unset means `direct`, which is pi's
-own default.
+model sees. `lib/exposure.ts` reads it; unset means `deferred`, so the tools
+stay out of the request unless a session asks otherwise.
 
 | value | effect |
 |---|---|
-| `direct` | declared in every request: description and guidelines are prompt cost |
+| `direct` | declared in every request: description and guidelines are prompt cost (pi's own default) |
 | `codemode` | callable as `tools.<name>(…)` in a script, listed in the codemode description |
-| `deferred` | callable from a script, not listed anywhere; `searchTools()`/`ALL_TOOLS` find it |
+| `deferred` | callable from a script, not listed anywhere; `searchTools()`/`ALL_TOOLS` find it — **the default** |
 | `hidden` | registered and unreachable |
 
 It is one variable rather than a key in each extension's config file because it
-is a property of the whole session: the [minimal profile](minimal.md) runs every
-tool the same way, and one value cannot drift across four files. Service
-settings stay in `gmail.json` and `calendar.json`.
+is a property of the whole session: every tool in this package ships
+deferred, and one value cannot drift across four files. Service settings stay
+in `gmail.json` and `calendar.json`.
 
 A new tool in this package passes `exposure: toolExposure()`. A tool that
 activates itself with `pi.setActiveTools()` must skip that when the exposure is

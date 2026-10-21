@@ -115,13 +115,13 @@ test("registers web_search and nothing else", () => {
 	assert(pi.tools.size === 1, `only one tool registered: ${[...pi.tools.keys()].join(", ")}`);
 });
 
-test("tools are declared by default and deferred under PI_TOOL_EXPOSURE", () => {
-	for (const tool of pi.tools.values()) assert(tool.exposure === "direct", `exposure: ${tool.exposure}`);
-	process.env.PI_TOOL_EXPOSURE = "deferred";
+test("tools are deferred by default and declared under PI_TOOL_EXPOSURE=direct", () => {
+	for (const tool of pi.tools.values()) assert(tool.exposure === "deferred", `exposure: ${tool.exposure}`);
+	process.env.PI_TOOL_EXPOSURE = "direct";
 	try {
 		const other = makePi();
 		createExtension(other);
-		for (const tool of other.tools.values()) assert(tool.exposure === "deferred", `exposure: ${tool.exposure}`);
+		for (const tool of other.tools.values()) assert(tool.exposure === "direct", `exposure: ${tool.exposure}`);
 	} finally {
 		delete process.env.PI_TOOL_EXPOSURE;
 	}
