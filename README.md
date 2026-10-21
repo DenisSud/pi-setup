@@ -112,6 +112,24 @@ No setting can do this: `-subagent` removes the tool from codemode too
 Hence a fork rather than a config line. Child agents still get declared tools —
 only the parent-facing registrations changed.
 
+What the fork offers is then narrowed per device in
+`~/.pi/agent/extensions/subagent/config.json`:
+
+```json
+{
+  "disabledFeatures": ["missions", "lane-management", "lane-metadata", "external-machines"],
+  "missions": { "enabled": false },
+  "scheduledRuns": { "enabled": false }
+}
+```
+
+That keeps workflow scripts, the budget/control knobs and agent management, and
+drops missions (which otherwise records every delegation), worktrees/lanes and
+remote machines: those actions disappear from the unknown-action list and their
+parameters are rejected with an error naming the setting. It does **not** shrink
+the prompt — `disabledFeatures` trims the tool declaration, which a deferred
+tool never sends — so it is a guardrail, not a saving.
+
 To follow a new upstream release: rebase `pi-setup` onto the new tag, keep the
 `SCRIPT_ONLY_TOOL` replacements, push, then `pi update --extensions` on each
 device.
@@ -134,6 +152,7 @@ device.
 | `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; path override `PI_ENV_CONFIG`) |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
+| `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions/lanes/remote machines off) |
 | `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages |
 | `~/.pi/agent/security.json.retired` | the old vault mapping (variable → Bitwarden item); safe to delete |
 
