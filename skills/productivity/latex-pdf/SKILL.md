@@ -1,6 +1,7 @@
 ---
 name: latex-pdf
 description: Produce a polished single-topic PDF document with LaTeX. Use when Denis says "make a PDF", "put this in a pdf with LaTeX", "format it nicely as a document", or wants a printable/properly typeset version of content already in the conversation. For resumes use the existing resume sources instead of this skill.
+disable-model-invocation: true
 ---
 
 # LaTeX PDF

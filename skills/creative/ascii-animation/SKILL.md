@@ -1,6 +1,7 @@
 ---
 name: ascii-animation
 description: Make living ASCII animations — swarms, slime mould, reaction–diffusion, boid schools — rendered as glyphs on a canvas and exported as a loop for a wallpaper, article cover or video. Use when the user wants a programmatic animation with an ASCII, terminal or retro-digital look, asks for a live wallpaper built from text characters, or wants generative art out of glyphs rather than pixels.
+disable-model-invocation: true
 ---
 
 # ASCII animation

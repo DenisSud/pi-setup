@@ -60,8 +60,9 @@ cache of `origin/main` and pi deletes anything not pushed.
 (`agent-browser`, `memory-consolidation`, …).
 Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
 the vault itself: `~/Documents/Notes/.pi/skills/`.
-Each skill is a directory with a `SKILL.md` whose frontmatter decides when it
-fires.
+Each skill is a directory with a `SKILL.md` whose frontmatter names it and
+describes it. Every skill here sets `disable-model-invocation: true`: it is
+invoked with `/skill:<name>` and never advertised to the model.
 
 ## Conventions
 

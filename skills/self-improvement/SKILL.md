@@ -1,6 +1,7 @@
 ---
 name: self-improvement
 description: Turn repeated work up a ladder — task, skill, automation. Use when the same task has been done a second time, when a procedure has stabilized, when asked to "automate this", or during a weekly review.
+disable-model-invocation: true
 ---
 
 # Self-improvement

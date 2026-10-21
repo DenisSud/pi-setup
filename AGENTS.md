@@ -24,6 +24,9 @@ know before touching it.
   take the whole package out of the prompt. A tool that calls
   `pi.setActiveTools()` on itself must skip that when the exposure is not
   `direct`. See [docs/minimal.md](docs/minimal.md).
+- **Skills are user-invoked**: every `SKILL.md` sets
+  `disable-model-invocation: true`. A skill that must fire on its own drops
+  that line, and the reason belongs in the same commit.
 - **Every extension carries its harness** at `extensions/<name>/test/run.sh`.
   A change is done when `harness` passes for every extension it touched, and
   `live` too when the change touches credentials or the network path.
