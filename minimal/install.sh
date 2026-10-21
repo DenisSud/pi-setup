@@ -17,21 +17,25 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET="${PI_MINIMAL_DIR:-$HOME/.pi/minimal}"
 MAIN="${PI_MAIN_AGENT_DIR:-$HOME/.pi/agent}"
+PACKAGE="github.com/DenisSud/pi-setup"
 PI_BIN="$(command -v pi || true)"
 
 [ -n "$PI_BIN" ] || { echo "install: pi is not on PATH" >&2; exit 1; }
-[ -d "$REPO/node_modules" ] || echo "install: warning: $REPO/node_modules is missing — run npm install there" >&2
 
 mkdir -p "$TARGET"
 chmod 700 "$TARGET"
 
-# settings.json is generated: the repo path is absolute because the profile
-# is not inside the checkout, and model defaults are carried over from the
-# daily profile so the trial does not start on a random model.
-python3 - "$REPO" "$TARGET" "$MAIN" <<'PY'
+# settings.json is generated. Three choices matter:
+#  - the package source is the same git package the daily profile uses, so pi
+#    keeps its own clone per agent dir (`<target>/git/…`) and the profile never
+#    loads a working checkout that happens to be stale or dirty;
+#  - model defaults are carried over from the daily profile so the profile
+#    does not start on a random model;
+#  - codemode is the only non-file tool declared here.
+python3 - "$TARGET" "$MAIN" "$PACKAGE" <<'PY'
 import json, os, sys
 
-repo, target, main = sys.argv[1:4]
+target, main, package = sys.argv[1:4]
 carried = {}
 main_settings = os.path.join(main, "settings.json")
 if os.path.exists(main_settings):
@@ -49,7 +53,7 @@ settings = {
     "defaultTools": ["read", "bash", "edit", "write", "+codemode"],
     "packages": [
         {
-            "source": repo,
+            "source": f"git:{package}",
             "extensions": [
                 "+extensions/env/index.ts",
                 "+extensions/calendar/index.ts",
@@ -64,7 +68,10 @@ with open(os.path.join(target, "settings.json"), "w") as handle:
     handle.write("\n")
 PY
 
-sed "s|@SKILLS_DIR@|$REPO/skills|g" "$REPO/minimal/SYSTEM.md" > "$TARGET/SYSTEM.md"
+# The skills pointer resolves inside the clone pi makes for this agent dir on
+# first launch, so the prompt and the loaded package always describe the same
+# commit.
+sed "s|@SKILLS_DIR@|$TARGET/git/$PACKAGE/skills|g" "$REPO/minimal/SYSTEM.md" > "$TARGET/SYSTEM.md"
 
 # Service configs come from the daily profile; credentials stay in the one
 # env.json, which the wrapper points PI_ENV_CONFIG at. Existing copies are

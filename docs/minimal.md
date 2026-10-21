@@ -15,6 +15,7 @@ It lives in its own agent directory (`~/.pi/minimal`), so the daily setup in
 | declared tools | 26 | `read`, `bash`, `edit`, `write`, `codemode` |
 | package tools | `direct` | `deferred` (`PI_TOOL_EXPOSURE`) |
 | skills | 32 advertised | 32, none advertised |
+| package source | `git:github.com/DenisSud/pi-setup` | same git source, own clone |
 | other packages | `pi-web-access`, `pi-subagents`, … | none |
 
 `deferred` is the quietest exposure pi has: the tool is callable from a
@@ -44,9 +45,16 @@ provider credentials stay in one file. Re-running it regenerates
 alone.
 
 Credentials are not duplicated: the wrapper sets `PI_ENV_CONFIG` to the daily
-`~/.pi/agent/env.json`. The profile points at this checkout by absolute path,
-so install it from a checkout you control (see
-[development.md](development.md#the-checkout-is-disposable)).
+`~/.pi/agent/env.json`.
+
+The package is installed as `git:github.com/DenisSud/pi-setup` — the same source
+the daily profile uses — so pi clones it per agent dir
+(`~/.pi/minimal/git/github.com/DenisSud/pi-setup`) and keeps it at
+`origin/main`. Nothing points at a working checkout, which is what makes the
+install identical on every device: run `pi update` inside the profile to pull a
+new push, and the profile keeps loading the same code as the daily one. The
+`SYSTEM.md` skills pointer resolves into that clone, so it appears on the first
+launch.
 
 ## How a request reaches a tool
 
