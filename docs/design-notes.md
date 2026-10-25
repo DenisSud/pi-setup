@@ -126,3 +126,25 @@ a fork is easier to rebase than a proxy is to trust.
 The cost is real and accepted: the fork tracks upstream by hand. Rebase the
 branch onto a new tag, keep the `SCRIPT_ONLY_TOOL` replacements, push, `pi
 update --extensions`.
+
+## The prompt carries the repeated instructions (2026-10)
+
+`SYSTEM.md` began as a 31-line "soul" and was cut to 8 lines when the package
+went script-only, on the bet that skills and project `AGENTS.md` files would
+carry the rest. They did not: the same corrections kept returning — TLDR first,
+the smallest change, no "shall I?", check the remote before claiming state,
+never commit to `main`, no em dashes.
+
+An audit of 1,194 human turns from 211 sessions on two machines counted them
+(subagent fan-out over the transcripts, then exact matching): skill or subagent
+process in 137 turns, TLDR or "be brief" in 98, "minimal" or "don't overthink"
+in 93, leftover cleanup in 60, branch and PR rules in 60, handoffs in 49,
+"delete means delete" in 45, verify before claiming in 26, em dashes or "sounds
+like me" in 6.
+
+So the prompt went to 547 words, grouped by where the failure happens: reply,
+work, repo, tools, standing policies. Two policies are new by request, not by
+frequency: an issue on his fork for any bug in code he owns, and no leftovers
+from one-off work. The script-only budget still holds — ~800 prompt tokens
+against the ~11.3k shape it replaced. A bullet that cannot cite a repeated turn
+gets cut; the categories are the structure to keep it from growing.
