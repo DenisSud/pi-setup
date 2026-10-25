@@ -95,13 +95,15 @@ const result = await tools.subagent({
     ],
   },
   async: true,
-  options: { timeoutMs: 2700000, toolTimeoutMs: 240000 },
+  options: { timeoutMs: 2700000, toolTimeoutMs: 420000 },
 });
 ```
 
-`toolTimeoutMs` is the backstop for a `curl` that ignores its own `--max-time`:
-it kills a single tool call that stays open, instead of letting one searcher hold
-the whole run.
+`toolTimeoutMs` is the backstop for a `curl` that ignores its own `--max-time`,
+and for the searcher that decides to `npm i` a package to check a claim: it kills
+a single tool call that stays open instead of letting one searcher hold the whole
+run. Seven minutes is long enough for a real install and short enough to catch a
+hang.
 
 The brief is not an arg: every child reads `brief.md` from `outdir`, so the file
 is the one copy and an edit between stages reaches the next one.
@@ -134,6 +136,7 @@ versus unconfirmed.
 | `revise` failed or missing | deliver `draft.md`, and list the audit's must-fix items in chat as open. Never label an unrevised draft as verified |
 | coverage returned no structured verdict | round 2 was skipped. Go straight to draft if the notes are solid, otherwise rerun with `rounds: 2` |
 | audit skipped every claim as `dead` | `curl` is being blocked or rate-limited. Fetch two cited URLs by hand before trusting the report |
+| a seeker failed on tool timeout | its notes are missing, the coverage judge sees the hole, gap-fill closes it. Check the report actually covers that sub-question; if it does not, rerun the run with the failed id only |
 | one sub-question still open after gap-fill | that is a real finding. Report it as open in the delivery, do not let it become prose |
 
 ## Why this shape
