@@ -86,7 +86,7 @@ is the prompt.
 
 Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
 against ~11.3k for a prompt that declares 26 tools and lists 32 skills. After
-the longer `SYSTEM.md` (551 words) and the 14 advertised skills, pi 1.4.0
+the longer `SYSTEM.md` (533 words) and the 14 advertised skills, pi 1.4.0
 reports 4.04k input tokens for the same probe, with the skills section at 6.4k
 characters. The script-only shape is still about three times smaller than the
 declaring one.

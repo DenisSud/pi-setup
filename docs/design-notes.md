@@ -142,7 +142,7 @@ in 93, leftover cleanup in 60, branch and PR rules in 60, handoffs in 49,
 "delete means delete" in 45, verify before claiming in 26, em dashes or "sounds
 like me" in 6.
 
-So the prompt went to 551 words, grouped by where the failure happens: reply,
+So the prompt went to 533 words, then lost the handoff line, grouped by where the failure happens: reply,
 work, repo, tools, standing policies. Two policies are new by request, not by
 frequency: an issue on his fork for any bug in code he owns, and no leftovers
 from one-off work. The script-only budget still holds — ~800 prompt tokens
@@ -180,10 +180,11 @@ The six skills that exist only here follow the same test: `agent-browser`,
 `latex-pdf` and `self-improvement` are reachable because the trigger is a
 situation; `ascii-animation`, `show-me` and `skill-authoring` stay hidden.
 
-`handoff` is hidden like upstream, but `SYSTEM.md` still tells the agent to end
-multi-turn work with a handoff file, so the prompt points at
-`skills/handoff/SKILL.md` for the format. That is the pattern for any hidden
-skill the prompt relies on: name the file, not the command.
+`handoff` is hidden like upstream and is deliberately absent from `SYSTEM.md`
+too: he asks for a handoff when he wants one, so a standing instruction to end
+every multi-turn session with a file was a line of prompt spent on a decision
+that is his. The pattern for a hidden skill the prompt does rely on is to name
+its `SKILL.md`, not the command; nothing in the prompt relies on one now.
 
 Cost: pi renders an advertised skill as name, description and absolute path.
 Fourteen is 6.4k characters, ~1.6k tokens on pi 1.4.0; all 31 would be 11.3k
