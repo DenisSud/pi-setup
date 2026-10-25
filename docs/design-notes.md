@@ -149,30 +149,44 @@ from one-off work. The script-only budget still holds — ~800 prompt tokens
 against the ~11.3k shape it replaced. A bullet that cannot cite a repeated turn
 gets cut; the categories are the structure to keep it from growing.
 
-## Eight skills are advertised, the other 23 are not (2026-10)
+## Invocation is copied from upstream, not re-derived (2026-10)
 
 Every skill was user-invoked. The transcripts show what that cost: across 1,194
-turns `/skill:` was typed twice and a skill was named six times, while the
-situations those skills exist for appeared in hundreds of turns. Denis states a
+turns `/skill:` was typed twice and a skill named six times, while the
+situations those skills exist for filled hundreds of turns. Denis states a
 situation ("the site needs a login", "this is broken", "grill me"), never a
 procedure name, so a hidden skill fires only when someone remembers it exists.
 
-The cut follows the rule in `writing-for-agents`: advertise a skill only when
-the agent must reach it on its own. That leaves eight. `agent-browser` (a page
-needs JavaScript, a click or a screenshot), `diagnosing-bugs` (something is
-broken and the cause is not obvious), `domain-modeling` (GLOSSARY or ADR work),
-`grilling` (the word "grill"), `handoff` (another agent resumes the work),
-`latex-pdf` ("make a PDF"), `self-improvement` (the same task a second time) and
-`wait-what` (a confused reply).
+The first fix was a hand-picked eight. The right fix was to stop hand-picking:
+most `SKILL.md` files here are copies of [`mattpocock/skills`](https://github.com/mattpocock/skills),
+which already splits them on one axis and documents the test in its
+`.agents/invocation.md`: a **user-invoked** skill orchestrates a flow the human
+picks, a **model-invoked** skill holds reusable discipline the agent must reach
+on its own, and only the latter can be called by another skill. Its README
+groups both buckets into those two lists; ours now matches them skill for
+skill, including the flips that look surprising at first: `pr`, `research`,
+`tdd`, `code-review`, `prototype`, `codebase-design`, `wizard` and
+`writing-for-agents` are advertised, while `handoff`, `wait-what`, `triage`,
+`wayfinder`, `to-spec`, `to-tickets`, `implement`, `implement-spec`,
+`improve-codebase-architecture`, `grill-with-docs`, `retro`, `ask-matt`,
+`setup-matt-pocock-skills` and `teach` are not.
 
-Kept hidden: the workflows he names by hand (`wayfinder`, `triage`, `to-spec`,
-`to-tickets`, `implement`, `code-review`, `pr`, `research`), the heavy ones that
-spawn agents or write to a tracker, and the reference skills whose only reader
-is another hidden skill.
+The dependency rule is what makes the split self-consistent rather than taste:
+`implement` (user-invoked) drives `tdd` and closes with `code-review`, so both
+must be model-invoked or the call cannot happen. A user-invoked skill can never
+reach another user-invoked one.
+
+The six skills that exist only here follow the same test: `agent-browser`,
+`latex-pdf` and `self-improvement` are reachable because the trigger is a
+situation; `ascii-animation`, `show-me` and `skill-authoring` stay hidden.
+
+`handoff` is hidden like upstream, but `SYSTEM.md` still tells the agent to end
+multi-turn work with a handoff file, so the prompt points at
+`skills/handoff/SKILL.md` for the format. That is the pattern for any hidden
+skill the prompt relies on: name the file, not the command.
 
 Cost: pi renders an advertised skill as name, description and absolute path.
-Eight is 3.6k characters, ~0.9k tokens on pi 1.4.0; all 31 would be 11.3k
-characters, ~2.8k tokens. Adding one is deleting one line. A new candidate needs
-a trigger-shaped description, not a summary, because that description is the
-whole routing surface. A wrong fire costs one skill read; the hidden set was
-paying in repeated instructions instead.
+Fourteen is 6.0k characters, ~1.5k tokens on pi 1.4.0; all 31 would be 11.3k
+characters, ~2.8k tokens. Copying upstream is also what keeps this from drifting
+back: a flip is a line of frontmatter plus the `policy` block in the skill's
+`agents/openai.yaml`, and the two harnesses stay in sync.

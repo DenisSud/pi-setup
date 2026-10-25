@@ -1,0 +1,5 @@
+interface:
+  display_name: "ASCII Animation"
+  short_description: "Generative ASCII animations"
+policy:
+  allow_implicit_invocation: false
