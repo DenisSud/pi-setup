@@ -61,8 +61,14 @@ cache of `origin/main` and pi deletes anything not pushed.
 Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
 the vault itself: `~/Documents/Notes/.pi/skills/`.
 Each skill is a directory with a `SKILL.md` whose frontmatter names it and
-describes it. Every skill here sets `disable-model-invocation: true`: it is
-invoked with `/skill:<name>` and never advertised to the model.
+describes it. Skills are user-invoked by default: `disable-model-invocation:
+true` keeps them out of the prompt, and `/skill:<name>` is the only door.
+
+Eight drop that line because the agent has to reach them on its own, not
+because the user names a procedure: `agent-browser`, `diagnosing-bugs`,
+`domain-modeling`, `grilling`, `handoff`, `latex-pdf`, `self-improvement`,
+`wait-what`. Their descriptions are routing pointers and carry the trigger
+branches; the other 23 keep a human-facing one-liner.
 
 ### Prompt and tool set
 
@@ -70,12 +76,16 @@ The package is built to keep the request small. Nothing here is declared to
 the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
-it when the name is unknown). Skills carry `disable-model-invocation: true`, so
-`/skill:<name>` loads one and none is advertised. `SYSTEM.md` in this repo is
-the prompt.
+it when the name is unknown). Only the eight model-invoked skills are
+advertised, and only as name, description and path: 3.6k characters, ~0.9k
+tokens on pi 1.4.0. All 31 would be 11.3k characters, ~2.8k tokens. `SYSTEM.md`
+in this repo is the prompt.
 
 Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
-against ~11.3k for a prompt that declares 26 tools and lists 32 skills.
+against ~11.3k for a prompt that declares 26 tools and lists 32 skills. That
+figure predates the longer `SYSTEM.md` (547 words, ~0.8k tokens) and the eight
+advertised skills (~0.9k tokens); at ~3.5k the script-only shape is still about
+three times smaller than the declaring one.
 
 A device matches that shape with three things in `~/.pi/agent`:
 

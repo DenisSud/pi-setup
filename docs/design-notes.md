@@ -148,3 +148,31 @@ frequency: an issue on his fork for any bug in code he owns, and no leftovers
 from one-off work. The script-only budget still holds — ~800 prompt tokens
 against the ~11.3k shape it replaced. A bullet that cannot cite a repeated turn
 gets cut; the categories are the structure to keep it from growing.
+
+## Eight skills are advertised, the other 23 are not (2026-10)
+
+Every skill was user-invoked. The transcripts show what that cost: across 1,194
+turns `/skill:` was typed twice and a skill was named six times, while the
+situations those skills exist for appeared in hundreds of turns. Denis states a
+situation ("the site needs a login", "this is broken", "grill me"), never a
+procedure name, so a hidden skill fires only when someone remembers it exists.
+
+The cut follows the rule in `writing-for-agents`: advertise a skill only when
+the agent must reach it on its own. That leaves eight. `agent-browser` (a page
+needs JavaScript, a click or a screenshot), `diagnosing-bugs` (something is
+broken and the cause is not obvious), `domain-modeling` (GLOSSARY or ADR work),
+`grilling` (the word "grill"), `handoff` (another agent resumes the work),
+`latex-pdf` ("make a PDF"), `self-improvement` (the same task a second time) and
+`wait-what` (a confused reply).
+
+Kept hidden: the workflows he names by hand (`wayfinder`, `triage`, `to-spec`,
+`to-tickets`, `implement`, `code-review`, `pr`, `research`), the heavy ones that
+spawn agents or write to a tracker, and the reference skills whose only reader
+is another hidden skill.
+
+Cost: pi renders an advertised skill as name, description and absolute path.
+Eight is 3.6k characters, ~0.9k tokens on pi 1.4.0; all 31 would be 11.3k
+characters, ~2.8k tokens. Adding one is deleting one line. A new candidate needs
+a trigger-shaped description, not a summary, because that description is the
+whole routing surface. A wrong fire costs one skill read; the hidden set was
+paying in repeated instructions instead.

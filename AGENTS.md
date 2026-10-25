@@ -31,9 +31,11 @@ know before touching it.
   Never install `npm:pi-subagents` — upstream's `model-only` exposure declares
   `subagent` in every request and hides it from codemode. Upgrade by rebasing
   the branch onto the new upstream tag. See [README.md](README.md#subagents-come-from-a-fork).
-- **Skills are user-invoked**: every `SKILL.md` sets
-  `disable-model-invocation: true`. A skill that must fire on its own drops
-  that line, and the reason belongs in the same commit.
+- **Skills are user-invoked by default**: every `SKILL.md` sets
+  `disable-model-invocation: true` unless the agent has to reach the skill on
+  its own, or another skill does. Those eight drop the line, keep a
+  trigger-shaped description, and the reason belongs in the same commit. See
+  [README](README.md#skills).
 - **Model binaries are Nix packages**: an extension that needs a model runs a
   CLI built by `flake.nix` from `PATH` (configurable in its own agent-dir file,
   e.g. `ocr.json`), never a pip/venv install. Models download at runtime into
