@@ -142,7 +142,7 @@ in 93, leftover cleanup in 60, branch and PR rules in 60, handoffs in 49,
 "delete means delete" in 45, verify before claiming in 26, em dashes or "sounds
 like me" in 6.
 
-So the prompt went to 547 words, grouped by where the failure happens: reply,
+So the prompt went to 551 words, grouped by where the failure happens: reply,
 work, repo, tools, standing policies. Two policies are new by request, not by
 frequency: an issue on his fork for any bug in code he owns, and no leftovers
 from one-off work. The script-only budget still holds — ~800 prompt tokens
@@ -186,7 +186,7 @@ multi-turn work with a handoff file, so the prompt points at
 skill the prompt relies on: name the file, not the command.
 
 Cost: pi renders an advertised skill as name, description and absolute path.
-Fourteen is 6.0k characters, ~1.5k tokens on pi 1.4.0; all 31 would be 11.3k
+Fourteen is 6.4k characters, ~1.6k tokens on pi 1.4.0; all 31 would be 11.3k
 characters, ~2.8k tokens. Copying upstream is also what keeps this from drifting
 back: a flip is a line of frontmatter plus the `policy` block in the skill's
 `agents/openai.yaml`, and the two harnesses stay in sync.
