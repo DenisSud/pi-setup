@@ -82,10 +82,11 @@ tokens on pi 1.4.0. All 31 would be 11.3k characters, ~2.8k tokens. `SYSTEM.md`
 in this repo is the prompt.
 
 Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
-against ~11.3k for a prompt that declares 26 tools and lists 32 skills. That
-figure predates the longer `SYSTEM.md` (547 words, ~0.8k tokens) and the eight
-advertised skills (~0.9k tokens); at ~3.5k the script-only shape is still about
-three times smaller than the declaring one.
+against ~11.3k for a prompt that declares 26 tools and lists 32 skills. After
+the longer `SYSTEM.md` (547 words) and the eight advertised skills, pi 1.4.0
+reports 3.38k input tokens for the same probe, with the skills section at 3.9k
+characters. The script-only shape is still about three times smaller than the
+declaring one.
 
 A device matches that shape with three things in `~/.pi/agent`:
 
