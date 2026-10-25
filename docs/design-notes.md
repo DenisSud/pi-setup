@@ -142,8 +142,8 @@ in 93, leftover cleanup in 60, branch and PR rules in 60, handoffs in 49,
 "delete means delete" in 45, verify before claiming in 26, em dashes or "sounds
 like me" in 6.
 
-So the prompt went to 533 words, then lost the handoff line, grouped by where the failure happens: reply,
-work, repo, tools, standing policies. Two policies are new by request, not by
+So the prompt went to 533 words and has since been cut to 344, keeping the
+sections where a failure happens: reply, repo, tools, standing policies. Two policies are new by request, not by
 frequency: an issue on his fork for any bug in code he owns, and no leftovers
 from one-off work. The script-only budget still holds — ~800 prompt tokens
 against the ~11.3k shape it replaced. A bullet that cannot cite a repeated turn
