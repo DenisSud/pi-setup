@@ -67,7 +67,7 @@ where most of these files started, and is copied rather than re-derived: a
 `disable-model-invocation: true` and keeps a human-facing one-line description;
 a **model-invoked** skill holds reusable discipline the agent has to reach on
 its own, keeps a routing description with trigger branches, and is the only
-kind another skill can call. 14 are model-invoked here, 17 are not.
+kind another skill can call. 14 are model-invoked here, 18 are not.
 
 The skills that are ours alone follow the same test: `agent-browser`,
 `latex-pdf` and `self-improvement` are advertised, `ascii-animation`,
@@ -81,7 +81,7 @@ as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
 it when the name is unknown). Only the 14 model-invoked skills are advertised,
 and only as name, description and path: 6.4k characters, ~1.6k tokens on pi
-1.4.0. All 31 would be 11.3k characters, ~2.8k tokens. `SYSTEM.md` in this repo
+1.4.0. All 32 would be ~11.7k characters, ~2.9k tokens. `SYSTEM.md` in this repo
 is the prompt.
 
 Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
