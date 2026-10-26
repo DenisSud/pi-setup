@@ -78,6 +78,11 @@ What the config-only route costs, measured against 0.44.0 with a stubbed fetch:
   as `aborted`, and `fallbackOn` accepts only transient, quota, network,
   invalid-response and unsupported. The escape hatch is a per-call
   `provider: "searxng"`;
+- keyless Exa sits behind Cloudflare. It answered from this machine, then
+  returned 403 "You are unable to access" for the same exit IP a few calls
+  later. A 403 is `auth`, again not a `fallbackOn` kind, so the search fails
+  outright. An Exa key moves the request to `api.exa.ai`, which is the path
+  worth trusting; the keyless MCP is a demo, not a backend;
 - there is no cooldown, so during an outage every search pays the Exa attempt
   before SearXNG answers. A breaker was ours to write, and this route does not
   have one.

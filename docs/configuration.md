@@ -117,10 +117,14 @@ becomes a slower answer instead of a failed one. `~/.pi/agent/web-search.json`:
 
 - Do not add `provider` or `searchProvider`: a single-provider field takes
   precedence over `searchRouting` and the fallback disappears.
-- Exa needs no key. Without `exaApiKey` it searches through Exa's hosted MCP,
-  which needs no credentials; the price is a per-IP rate limit that answers 429
-  under fan-out. An `EXA_API_KEY` in `env.json` (or `exaApiKey` here) lifts it
-  and unlocks the date filters.
+- **Set an Exa key.** `EXA_API_KEY` in `env.json` (or `exaApiKey` here) sends
+  search to `api.exa.ai` with the key in a header. Without one it goes through
+  Exa's hosted MCP at `mcp.exa.ai`, which needs no credentials but sits behind
+  Cloudflare: it answered from this machine, then returned 403 "You are unable
+  to access" for the same exit IP a few calls later. A 403 classifies as `auth`,
+  and `fallbackOn` cannot list `auth`, so keyless Exa fails the search instead
+  of falling back. The key lifts the MCP's per-IP limit and unlocks the date
+  filters too.
 - `fallbackOn` has no `aborted` kind, so an Exa request that hangs until its 60s
   budget fails the search instead of falling through. Everything else falls
   through: connection failures, 429s, 5xx and unparseable responses.

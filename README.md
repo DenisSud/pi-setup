@@ -253,6 +253,7 @@ package-refresh behaviour, and how to add an extension.
 | symptom | cause and fix |
 |---|---|
 | `X not set — add it to ~/.pi/agent/env.json` | variable missing from `env.json`; add it, then `/reload` |
+| `exa search failed (auth): ... 403` | Exa refused the keyless MCP (Cloudflare) or the key. `auth` is not a `fallbackOn` kind, so nothing falls through: put `EXA_API_KEY` in `env.json`, or retry with `web_search({ provider: "searxng" })` |
 | `exa search failed (aborted)` | Exa hung past its 60s budget. `fallbackOn` has no `aborted` kind, so the SearXNG fallback does not fire: retry with `web_search({ provider: "searxng" })` |
 | `Configured search routing exhausted` | both providers failed; check `~/.pi/agent/web-search.json` and `services.searx` |
 | a skill or edit disappeared from this checkout | the package refresh reset it; see [AGENTS.md](AGENTS.md) — commit and push |
