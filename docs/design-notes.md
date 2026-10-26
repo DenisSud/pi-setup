@@ -303,6 +303,12 @@ trigger ("please just ship it") must not be read as full send.
 rounds and fixes findings until it approves. `full-send` runs `code-review`
 first when a spec exists, then `review-loop` on the behavior diff.
 
+The reviewer is the same DeepSeek V4.1 Flash model as the parent, at max
+thinking. The fresh context and the brief are the second opinion; the round
+budget caps the cost. Same-model review shares the parent's blind spots, so
+`review-loop` is not a substitute for a different-family check when a change
+is risky.
+
 The T3 Code tools in upstream (`watch_pull_request`, `delegate_task`,
 `AskUserQuestion`) do not exist here. The adaptation uses `tools.subagent` for
 the reviewer, `babysit-pr/scripts/pr-wait` for the watcher, and the existing

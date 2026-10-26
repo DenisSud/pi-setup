@@ -1,6 +1,6 @@
 ---
 name: review-loop
-description: "Loop a cross-family reviewer over the current diff until it approves, fixing real findings each round. Use when the user says 'review loop' or 'sol loop', or wants the same reviewer to re-check fixes until clean. For a one-pass Standards + Spec report, use code-review instead."
+description: "Loop a fresh reviewer over the current diff until it approves, fixing real findings each round. Use when the user says 'review loop' or 'sol loop', or wants a second pass on fixes until clean. For a one-pass Standards + Spec report, use code-review instead."
 metadata:
   credits:
     skill: sol-loop
@@ -53,17 +53,17 @@ pre-failing checks in the brief.
 ## 2. Start the reviewer
 
 `subagent` is reachable only from codemode in this setup, not as a declared
-tool. Use the `reviewer` agent, which is read-only. Pin a model from a
-different family than the parent. In this setup `opencode-go/glm-5.3:high`
-is the default cross-family reviewer. If the launch fails because that model is
-unavailable, report the model and pick another family. If the reviewer inherits
-the parent model, say so in the report.
+tool. Use the `reviewer` agent, which is read-only. In this setup the reviewer
+runs `opencode-go/deepseek-v4.1-flash:max`, the same model as the parent: the
+fresh context and the brief are the second opinion, and the round budget caps
+the cost. Same-model review shares the parent's blind spots, so keep the budget
+tight. If the reviewer inherits a different model, say so in the report.
 
 ```js
 const result = await tools.subagent({
   agent: "reviewer",
   task: "<the round 1 brief>",
-  model: "opencode-go/glm-5.3:high",
+  model: "opencode-go/deepseek-v4.1-flash:max",
   async: false,
 });
 text(result);
