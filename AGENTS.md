@@ -36,7 +36,9 @@ know before touching it.
   `pi-subagents` fork bundles, shadowing them by name (package beats builtin),
   so a change there is a diff against upstream that has to be re-applied on
   every fork bump. Keep the diff to the lines this setup needs and never fork a
-  whole prompt for style.
+  whole prompt for style. When a skill list is the only difference, use
+  `subagents.agentOverrides` in `settings.json` instead: upstream's prompt keeps
+  tracking, and there is nothing to re-diff.
 - **Skills are user-invoked by default**: every `SKILL.md` sets
   `disable-model-invocation: true` unless the agent has to reach the skill on
   its own, or another skill does. The 14 that qualify drop the line and keep a

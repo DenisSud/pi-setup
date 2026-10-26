@@ -157,15 +157,24 @@ profiles are versioned and the fork stays a behaviour patch. The cost is drift:
 each fork bump means diffing the bundled profiles against ours and re-applying
 a handful of lines.
 
+Skills reach a child as a name, a description and a path; the body is read on
+demand. So the question per agent is "would this child recognise the trigger",
+not "how big is the prompt". `worker` and `delegate` carry `tdd`,
+`diagnosing-bugs` and `codebase-design`; `oracle` carries `codebase-design` and
+`domain-modeling`; `researcher` carries `agent-browser`; `reviewer` and `scout`
+carry none. worker, delegate and oracle are `subagents.agentOverrides` in `settings.json`, since
+only the skill list changes and a copy would mean re-diffing a whole upstream
+prompt for one line; `researcher` keeps its `skills:` line inside the profile
+because that file already differs. `inheritSkills: true` was rejected for the
+same reason `codemode` was: 14 skills of catalog, a third of which assume a
+human in the loop, one of which fans out subagents a child cannot launch.
+
 Considered and rejected: giving the role agents `codemode`. Our tools are
 script-only, but a child that *names* one in `tools` gets it activated and
 declared — measured on pi 1.4.0, a researcher listing `web_search` calls it
 directly — so codemode would add a tool, its declaration and a script layer to
 reach what naming already reaches. It also reaches nothing in a foreground
-child, which never loads the parent's ambient extensions. Same reasoning for
-`inheritSkills: true` on every profile: the catalog is 6.4k characters. Naming
-the one skill that pays, `skills: agent-browser` on `researcher`, costs one
-frontmatter line.
+child, which never loads the parent's ambient extensions.
 
 ## The prompt carries the repeated instructions (2026-10)
 

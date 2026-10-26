@@ -90,6 +90,28 @@ of frontmatter lines and the prompt sentences that depended on the tools this
 setup does not have. A fork bump means diffing the bundled files against these
 and re-applying the change, the same way the fork itself is rebased.
 
+Skills for the other role agents are an override, not a copy: the profile is
+upstream's, only its skill list changes, so `settings.json` carries it and
+there is nothing to re-diff on a rebase.
+
+```json
+"subagents": {
+  "agentOverrides": {
+    "worker":   { "skills": ["tdd", "diagnosing-bugs", "codebase-design"] },
+    "delegate": { "skills": ["tdd", "diagnosing-bugs", "codebase-design"] },
+    "oracle":   { "skills": ["codebase-design", "domain-modeling"] }
+  }
+}
+```
+
+A child sees a skill's name, description and path, not its body: `tdd` costs
+149 characters of its prompt until the task matches, and then it reads the
+file. `inheritSkills: true` instead would hand every child all 14
+model-invoked skills (6.4k characters, ~1.6k tokens) including the ones whose
+flow assumes a human (`grilling`, `wizard`) and the one that fans out more
+subagents (`code-review`), which a child cannot do. `reviewer` and `scout` get
+none: a review does not improve by being told how to write a test first.
+
 ### Prompt and tool set
 
 The package is built to keep the request small. Nothing here is declared to
@@ -206,7 +228,7 @@ English text intact.
 | `~/.pi/agent/ocr.json` | optional; OCR binary name, timeout, output cap and artifact directory |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
 | `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions/lanes/remote machines off) |
-| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages |
+| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages, and the `subagents.agentOverrides` skill lists above |
 | `~/.pi/agent/security.json.retired` | the old vault mapping (variable → Bitwarden item); safe to delete |
 
 Per-device files are not in git. On a new machine, copy them over.
