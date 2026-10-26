@@ -76,11 +76,18 @@ where most of these files started, and is copied rather than re-derived: a
 `disable-model-invocation: true` and keeps a human-facing one-line description;
 a **model-invoked** skill holds reusable discipline the agent has to reach on
 its own, keeps a routing description with trigger branches, and is the only
-kind another skill can call. 14 are model-invoked here, 18 are not.
+kind another skill can call. 18 are model-invoked here, 18 are not.
 
 The skills that are ours alone follow the same test: `agent-browser`,
 `latex-pdf` and `self-improvement` are advertised, `ascii-animation`,
 `show-me` and `skill-authoring` are not.
+
+`full-send`, `full-stop`, `review-loop` and `babysit-pr` are adapted from
+[`t3dotgg/tstack`](https://github.com/t3dotgg/tstack) (MIT, credited in each
+skill directory). They advertise because their trigger is a spoken phrase
+("full send", "full stop", "review loop", "babysit"), not a flow picked from a
+menu. `full-send` is the only skill here that grants merge authority, and only
+on an explicit request; `full-stop` stops at a ready PR.
 
 ### Agent profiles
 
@@ -115,9 +122,9 @@ there is nothing to re-diff on a rebase.
 
 A child sees a skill's name, description and path, not its body: `tdd` costs
 149 characters of its prompt until the task matches, and then it reads the
-file. `inheritSkills: true` instead would hand every child all 14
-model-invoked skills (6.4k characters, ~1.6k tokens) including the ones whose
-flow assumes a human (`grilling`, `wizard`) and the one that fans out more
+file. `inheritSkills: true` instead would hand every child all 18
+model-invoked skills (7.7k characters, ~1.9k tokens) including the ones whose
+flow assumes a human (`grilling`, `wizard`, `full-send`) and the one that fans out more
 subagents (`code-review`), which a child cannot do. `reviewer` and `scout` get
 none: a review does not improve by being told how to write a test first.
 
@@ -127,16 +134,16 @@ The package is built to keep the request small. Nothing here is declared to
 the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
-it when the name is unknown). Only the 14 model-invoked skills are advertised,
-and only as name, description and path: 6.4k characters, ~1.6k tokens on pi
-1.4.0. All 32 would be ~11.7k characters, ~2.9k tokens. `SYSTEM.md` in this repo
+it when the name is unknown). Only the 18 model-invoked skills are advertised,
+and only as name, description and path: 7.7k characters, ~1.9k tokens on pi
+1.4.0. All 36 would be ~13.8k characters, ~3.4k tokens. `SYSTEM.md` in this repo
 is the prompt.
 
 Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
 against ~11.3k for a prompt that declares 26 tools and lists 32 skills. After
 the longer `SYSTEM.md` (344 words) and the 14 advertised skills, pi 1.4.0
-reports 4.04k input tokens for the same probe, with the skills section at 6.4k
-characters. The script-only shape is still about three times smaller than the
+reported 4.04k input tokens for the same probe, with the skills section at 6.4k
+characters; the four tstack skills raise that section to 7.7k. The script-only shape is still about three times smaller than the
 declaring one.
 
 A device matches that shape with three things in `~/.pi/agent`:
