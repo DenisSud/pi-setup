@@ -110,8 +110,9 @@ Full confidence means all of these are true on the latest commit:
 Merge with the method the repo uses. Check the allowed methods and recent merged
 PRs. If the repo uses a merge queue or auto-merge, stay until GitHub reports the
 PR as merged. Merge through branch protection as configured. Never use `--admin`
-or other bypasses. You can ignore automated reviews that request "needs human
-review" if you have high confidence in your changes.
+or other bypasses. You can dismiss an automated review that requests "needs human review" only
+with a written reason and evidence. A human review that requests changes is
+never dismissible.
 
 ## Asking the user
 

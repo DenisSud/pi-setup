@@ -55,9 +55,9 @@ pre-failing checks in the brief.
 `subagent` is reachable only from codemode in this setup, not as a declared
 tool. Use the `reviewer` agent, which is read-only. Pin a model from a
 different family than the parent. In this setup `opencode-go/glm-5.3:high`
-is the default cross-family reviewer; `opencode-go/gemini-4-argon:high` also
-works, and `opencode-go/gpt-5.6-luna` is region-blocked here. If the reviewer
-inherits the parent model, say so in the report.
+is the default cross-family reviewer. If the launch fails because that model is
+unavailable, report the model and pick another family. If the reviewer inherits
+the parent model, say so in the report.
 
 ```js
 const result = await tools.subagent({
