@@ -57,7 +57,25 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 ### 4. Spawn both sub-agents in parallel
 
-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
+In pi, subagents are reached from codemode, not as a declared tool. Launch both
+reviewers in one named `parallel` workflow and aggregate the reports they
+return:
+
+```js
+const result = await tools.subagent({
+  workflow: "parallel",
+  args: {
+    tasks: [
+      { agent: "reviewer", task: standardsBrief },
+      { agent: "reviewer", task: specBrief },
+    ],
+  },
+  async: false,
+});
+text(result);
+```
+
+The children get no history: paste each full brief into its `task`.
 
 **Standards sub-agent prompt** should include:
 

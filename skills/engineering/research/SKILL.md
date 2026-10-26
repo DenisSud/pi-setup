@@ -3,7 +3,18 @@ name: research
 description: Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.
 ---
 
-Spin up a **background agent** to do the research, so you keep working while it reads.
+Spin up a **background agent** to do the research, so you keep working while it
+reads. In pi, launch the `researcher` agent from codemode:
+
+```js
+const run = await tools.subagent({
+  agent: "researcher",
+  task: "<the question and what the answer is for>",
+  async: true,
+});
+```
+
+It wakes the session when it finishes.
 
 Its job:
 
