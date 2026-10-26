@@ -11,6 +11,10 @@ pi install git:github.com/DenisSud/pi-setup
 pi install npm:pi-web-access      # the search tool lives here, not in this repo
 ```
 
+Then put `EXA_API_KEY` in `~/.pi/agent/env.json`. Without a key `web_search`
+falls to Exa's keyless MCP, which Cloudflare blocks and which has no fallback:
+see [Search](docs/configuration.md#search).
+
 Project scope, or a specific ref:
 
 ```sh
