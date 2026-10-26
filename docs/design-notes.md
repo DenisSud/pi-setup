@@ -282,3 +282,28 @@ Fourteen is 6.4k characters, ~1.6k tokens on pi 1.4.0; all 31 would be 11.3k
 characters, ~2.8k tokens. Copying upstream is also what keeps this from drifting
 back: a flip is a line of frontmatter plus the `policy` block in the skill's
 `agents/openai.yaml`, and the two harnesses stay in sync.
+
+## Full send is a permission contract (2026-10-27)
+
+`full-send`, `full-stop`, `review-loop` and `babysit-pr` come from
+[`t3dotgg/tstack`](https://github.com/t3dotgg/tstack) (MIT, credited in each
+skill directory). They are the exception to the user-invoked default: the
+trigger is a spoken phrase ("full send", "full stop", "review loop",
+"babysit"), not a flow picked from a menu. Hiding them recreates the failure
+the note above describes: the user says the phrase, the model cannot see the
+skill, and the work runs with none of its rules.
+
+`full-send` is the only skill here that grants merge authority. The body keeps
+the grant narrow: an explicit request, a proof requirement, a review verdict on
+the final diff, and a merge gate that still respects branch protection. A false
+trigger ("please just ship it") must not be read as full send.
+
+`review-loop` does not replace `code-review`. `code-review` reports two axes
+(Standards and Spec) in parallel and stops; `review-loop` runs one reviewer in
+rounds and fixes findings until it approves. `full-send` runs `code-review`
+first when a spec exists, then `review-loop` on the behavior diff.
+
+The T3 Code tools in upstream (`watch_pull_request`, `delegate_task`,
+`AskUserQuestion`) do not exist here. The adaptation uses `tools.subagent` for
+the reviewer, `babysit-pr/scripts/pr-wait` for the watcher, and the existing
+`pr` skill for the PR body.
