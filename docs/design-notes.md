@@ -58,6 +58,42 @@ its system dependencies with it. The split now is:
 - `curl` in bash — static HTML, JSON, APIs, one-off downloads;
 - the `agent-browser` skill — anything that has to run or be driven.
 
+## Exa first, SearXNG second, no search extension of our own (2026-10)
+
+`web_search` used to live here as 233 lines of SearXNG client with a
+concurrency gate. Exa is the better index, and putting both behind one tool
+meant owning the fallback, the breaker and the response parsing.
+
+`pi-web-access` already owns exactly that, as configuration: `searchRouting`
+runs the providers in order and moves on only for the failure kinds named in
+`fallbackOn`. Two facts settled it. Exa's hosted MCP answers with no API key at
+all, and `isExaAvailable()` returns true unconditionally, so a keyless Exa still
+takes part in the route. The config is in
+[configuration.md](configuration.md#search).
+
+What the config-only route costs, measured against 0.44.0 with a stubbed fetch:
+
+- a connection failure falls through to SearXNG — verified;
+- a request that hangs until Exa's 60s abort does not — verified: it classifies
+  as `aborted`, and `fallbackOn` accepts only transient, quota, network,
+  invalid-response and unsupported. The escape hatch is a per-call
+  `provider: "searxng"`;
+- there is no cooldown, so during an outage every search pays the Exa attempt
+  before SearXNG answers. A breaker was ours to write, and this route does not
+  have one.
+
+The extension was deleted, and it had to be. pi refuses to load a second
+extension that claims a taken tool name: `Tool "web_search" conflicts with
+<path>`, and the losing package is skipped whole, not just the one tool. With
+both installed, `pi-web-access` never loaded — all four tools and its commands
+gone, with an error on startup. So the deletion and the install are one change,
+not two, and `agents/researcher.md` was updated in the same commit for the
+parameters that changed.
+
+`fetch_content`, `get_search_content` and `source_check` arrive with the package
+as deferred tools. They stay out of the prompt, and reading is still curl or
+`agent-browser` per the note above.
+
 ## Extensions do not import each other
 
 The old `security` extension doubled as a library: `calendar` and `gmail`

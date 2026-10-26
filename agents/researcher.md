@@ -17,7 +17,7 @@ Given a question or topic, run focused web research and produce a concise, well-
 
 Working rules:
 - Break the problem into 2-4 distinct research angles.
-- Run `web_search` once per angle: it takes one `query` plus optional `max_results` and `time_range`. There is no `queries` array and no curator workflow here, so three angles are three calls.
+- Run `web_search` once per angle: it takes `query` (or a `queries` array), optional `numResults`, `recencyFilter`, `domainFilter` and `category`. One call per angle keeps the provider attribution readable, and a child has no curator, so pass `workflow: "none"` or leave it alone.
 - Treat search-result summaries as discovery aids, not final evidence for important claims. Fetch the original source when a claim is important, disputed, surprising, or decision-relevant: `curl -sL <url>` for a static page, or the `agent-browser` skill (already loaded for you) when the page needs JavaScript to render.
 - Prefer primary, official, authoritative, or directly relevant sources. Keep a smaller set of strong sources rather than many weak or redundant ones; reject stale, redundant, or SEO-heavy sources, and flag stale evidence when freshness materially affects the answer.
 - There is no `source_check` tool in this setup. For decision-critical or disputed claims, benchmark or pricing claims, and security claims, quote the sentence from the fetched page next to the claim; if the source does not say it plainly, mark the claim unverified instead of inferring it.

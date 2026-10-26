@@ -8,6 +8,7 @@ the code syncs through git, the machine-local config does not.
 
 ```sh
 pi install git:github.com/DenisSud/pi-setup
+pi install npm:pi-web-access      # the search tool lives here, not in this repo
 ```
 
 Project scope, or a specific ref:
@@ -40,10 +41,14 @@ cache of `origin/main` and pi deletes anything not pushed.
 | extension | what it does |
 |---|---|
 | `env` | loads `~/.pi/agent/env.json` into `process.env` at startup (names-only `/env` command) |
-| `web-search` | `web_search` (SearXNG) — source discovery only; reading pages is curl or the `agent-browser` skill |
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 | `ocr` | `ocr`: PDF/image → markdown with Indra OCR, locally (Nix package, CPU, no network) |
+
+Search is not an extension here. `web_search` comes from the npm package
+`pi-web-access`, configured in `~/.pi/agent/web-search.json` to try Exa first and
+fall back to the local SearXNG. See
+[docs/configuration.md](docs/configuration.md#search).
 
 ### Lib
 
@@ -82,7 +87,7 @@ same name:
 
 | profile | what this setup changes |
 |---|---|
-| `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. No `fetch_content`, `get_search_content` or `source_check` — a page is read with `curl -sL`, and the skill covers what needs a browser |
+| `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. `pi-web-access` ships `fetch_content`, `get_search_content` and `source_check` beside `web_search` and the child gets none of them: a page is read with `curl -sL`, and the skill covers what needs a browser |
 | `reviewer` | adds `bash`, so a committed range is readable: `git diff main...HEAD`, `git log`, `gh issue view`. Without it a review of a branch could only see the working tree |
 
 Both are copies of the bundled profiles, not new agents: the diff is a couple
@@ -248,12 +253,14 @@ package-refresh behaviour, and how to add an extension.
 | symptom | cause and fix |
 |---|---|
 | `X not set — add it to ~/.pi/agent/env.json` | variable missing from `env.json`; add it, then `/reload` |
-| `web_search: cannot reach SearXNG` | the local SearXNG service is down (`services.searx`) |
+| `exa search failed (aborted)` | Exa hung past its 60s budget. `fallbackOn` has no `aborted` kind, so the SearXNG fallback does not fire: retry with `web_search({ provider: "searxng" })` |
+| `Configured search routing exhausted` | both providers failed; check `~/.pi/agent/web-search.json` and `services.searx` |
 | a skill or edit disappeared from this checkout | the package refresh reset it; see [AGENTS.md](AGENTS.md) — commit and push |
 | `rbw` fails with `Inappropriate ioctl for device` | nothing in this package uses it any more; the diagnosis is in [docs/design-notes.md](docs/design-notes.md) |
 
 ## System dependencies
 
-Not npm: SearXNG, `nvidia-smi`, and `agent-browser` + `chromium` from the NixOS
-config. `rbw`, `trafilatura`, `pandoc` and `poppler-utils` were only needed by
-the retired vault scripts and `web_fetch` tool.
+Not npm: SearXNG (the search fallback), `nvidia-smi`, and `agent-browser` +
+`chromium` from the NixOS config. `rbw`, `trafilatura`, `pandoc` and
+`poppler-utils` were only needed by the retired vault scripts and `web_fetch`
+tool.

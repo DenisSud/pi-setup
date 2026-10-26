@@ -15,6 +15,7 @@ One file per concern, the same shape pi uses for `settings.json`, `mcp.json`,
 | `env.json` | `env` extension | environment variables: service keys, passwords, anything the shell needs |
 | `gmail.json` | `gmail` extension | address and IMAP connection facts |
 | `calendar.json` | `calendar` extension | CalDAV URL, collection, credential variable names |
+| `web-search.json` | `pi-web-access` (npm) | search provider order, fallback kinds, the local SearXNG endpoint |
 | `settings.json` | pi | model, theme, packages. Extensions do not add keys here. |
 | `auth.json` | pi | provider API keys and OAuth tokens — written by `/login` and `pi auth`; extensions never touch it |
 | `mcp-auth.json` | pi | MCP OAuth tokens |
@@ -93,6 +94,42 @@ A new tool in this package passes `exposure: toolExposure()`. A tool that
 activates itself with `pi.setActiveTools()` must skip that when the exposure is
 not `direct`, or it declares itself anyway.
 
+`web_search` is not in this package, so it does not read `PI_TOOL_EXPOSURE`.
+`pi-web-access` has its own switch, `toolExposure` in `web-search.json`
+(`direct` or `deferred`), and it ships as `deferred` to match.
+
+## Search
+
+`web_search` belongs to the npm package `pi-web-access`, not to a directory in
+`extensions/`. It ships Exa first and the local SearXNG second, so a dead Exa
+becomes a slower answer instead of a failed one. `~/.pi/agent/web-search.json`:
+
+```json
+{
+  "searxngBaseUrl": "http://127.0.0.1:8888",
+  "toolExposure": "deferred",
+  "searchRouting": {
+    "providers": ["exa", "searxng"],
+    "fallbackOn": ["network", "transient", "quota", "invalid-response"]
+  }
+}
+```
+
+- Do not add `provider` or `searchProvider`: a single-provider field takes
+  precedence over `searchRouting` and the fallback disappears.
+- Exa needs no key. Without `exaApiKey` it searches through Exa's hosted MCP,
+  which needs no credentials; the price is a per-IP rate limit that answers 429
+  under fan-out. An `EXA_API_KEY` in `env.json` (or `exaApiKey` here) lifts it
+  and unlocks the date filters.
+- `fallbackOn` has no `aborted` kind, so an Exa request that hangs until its 60s
+  budget fails the search instead of falling through. Everything else falls
+  through: connection failures, 429s, 5xx and unparseable responses.
+- A call can override the route: `web_search({ query, provider: "searxng" })`.
+- `category: "company"` / `"people"` is the lead lookup; other providers ignore
+  it, so force `provider: "exa"` when the category matters.
+
+`PI_CODING_AGENT_DIR` moves the file with the rest of the agent directory.
+
 ## Extension files in detail
 
 - `gmail.json` — `username` (required) plus optional `host`, `port` (default
@@ -105,6 +142,9 @@ not `direct`, or it declares itself anyway.
   `https://cal.sudakov.site`), `collection` (default `/denis/main/`), `userVar` /
   `passwordVar` (default the `RADICALE_AGENT_*` pair), `timezone` (default
   `Europe/Moscow`), `auditLog`. `CALENDAR_CONFIG` overrides the path.
+- `web-search.json` — owned by `pi-web-access`, not by this package; see
+  [Search](#search). Defaults: the provider `auto` chain, Exa through its
+  hosted MCP, SearXNG at `http://127.0.0.1:8888`, tools deferred.
 
 A missing variable is reported by the consumer with the exact name to add to
 `env.json` (`lib/credentials.ts`); a malformed file is reported when the

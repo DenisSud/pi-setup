@@ -47,7 +47,6 @@ there is no build step and no bundler in this repo.
 | extension | harness | `live` variant | live needs |
 |---|---|---|---|
 | `env` | temp files, warnings, `/env` | — | — |
-| `web-search` | mocked SearXNG | `WEB_SEARCH_LIVE=1` | local SearXNG |
 | `calendar` | mocked CalDAV | `CALENDAR_LIVE=1`, writes with `CALENDAR_LIVE_WRITE=1` | `RADICALE_AGENT_*` in `env.json` |
 | `gmail` | fake IMAP | `GMAIL_LIVE=1`, writes with `GMAIL_LIVE_WRITE=1` | `GMAIL_APP_PASSWORD` in `env.json`, `gmail.json` |
 
