@@ -162,12 +162,13 @@ demand. So the question per agent is "would this child recognise the trigger",
 not "how big is the prompt". `worker` and `delegate` carry `tdd`,
 `diagnosing-bugs` and `codebase-design`; `oracle` carries `codebase-design` and
 `domain-modeling`; `researcher` carries `agent-browser`; `reviewer` and `scout`
-carry none. worker, delegate and oracle are `subagents.agentOverrides` in `settings.json`, since
-only the skill list changes and a copy would mean re-diffing a whole upstream
-prompt for one line; `researcher` keeps its `skills:` line inside the profile
-because that file already differs. `inheritSkills: true` was rejected for the
-same reason `codemode` was: 14 skills of catalog, a third of which assume a
-human in the loop, one of which fans out subagents a child cannot launch.
+carry none. The three are `subagents.agentOverrides` in `settings.json`, not
+copied profiles: only the skill list changes, and a copy would mean re-diffing
+a whole upstream prompt for one line. `researcher` keeps its `skills:` line
+inside the profile because that file already differs. `inheritSkills: true` was
+rejected for the same reason `codemode` was: 14 skills of catalog, several of
+which assume a human in the loop, and `code-review` fans out subagents a child
+cannot launch.
 
 Considered and rejected: giving the role agents `codemode`. Our tools are
 script-only, but a child that *names* one in `tools` gets it activated and
