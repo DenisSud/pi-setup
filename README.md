@@ -73,6 +73,23 @@ The skills that are ours alone follow the same test: `agent-browser`,
 `latex-pdf` and `self-improvement` are advertised, `ascii-animation`,
 `show-me` and `skill-authoring` are not.
 
+### Agent profiles
+
+`agents/` holds the subagent profiles this setup overrides, declared in
+`package.json` under `pi.subagents.agents` so pi-subagents discovers them as
+package agents — source priority 1, above the fork's builtin profiles of the
+same name:
+
+| profile | what this setup changes |
+|---|---|
+| `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. No `fetch_content`, `get_search_content` or `source_check` — a page is read with `curl -sL`, and the skill covers what needs a browser |
+| `reviewer` | adds `bash`, so a committed range is readable: `git diff main...HEAD`, `git log`, `gh issue view`. Without it a review of a branch could only see the working tree |
+
+Both are copies of the bundled profiles, not new agents: the diff is a couple
+of frontmatter lines and the prompt sentences that depended on the tools this
+setup does not have. A fork bump means diffing the bundled files against these
+and re-applying the change, the same way the fork itself is rebased.
+
 ### Prompt and tool set
 
 The package is built to keep the request small. Nothing here is declared to
@@ -115,12 +132,14 @@ call has to name the tool.
 
 `subagent`, `bg_wait`, `subagent_supervisor` and `contact_supervisor` come from
 [DenisSud/pi-subagents](https://github.com/DenisSud/pi-subagents), branch
-`pi-setup`: upstream `v0.80.0` plus one patch. Upstream registers those tools
-with `exposure: "model-only"` — declared to the model, invisible to a codemode
-script. `model-only` becomes `deferred`, the activation helpers stop activating
-script-only tools (naming one in `setActiveTools()` would only declare it), and
-its two skills carry `disable-model-invocation: true` so `/skill:council-mode`
-still works.
+`pi-setup`: upstream `v0.80.0` plus two patches. The first: upstream registers
+those tools with `exposure: "model-only"` — declared to the model, invisible to
+a codemode script. `model-only` becomes `deferred`, the activation helpers stop
+activating script-only tools (naming one in `setActiveTools()` would only
+declare it), and its two skills carry `disable-model-invocation: true` so
+`/skill:council-mode` still works. The second: a child tool that no loaded
+provider registered is a warning on the child's result, not a failed run
+(issue #4).
 
 No setting can do this: `-subagent` removes the tool from codemode too
 (`tools.subagent` is then undefined), and the package has no exposure knob.

@@ -127,6 +127,46 @@ The cost is real and accepted: the fork tracks upstream by hand. Rebase the
 branch onto a new tag, keep the `SCRIPT_ONLY_TOOL` replacements, push, `pi
 update --extensions`.
 
+## Subagents: profiles here, missing tools warn (2026-10-26, issue #4)
+
+Two defects, found in one session that ran a review and an implementation.
+
+**A missing child tool failed a finished run.** `agents/researcher.md` named
+`fetch_content`, `get_search_content` and `source_check`, from a web extension
+this setup does not have. The background child ran with the tools it had, wrote
+its report, and the parent then reclassified the completed run as failed from
+the child's own tool diagnostic. A foreground child instead aborted on
+`agent_start`, so the two hosts disagreed about the same condition. The fork
+now treats a name in `tools` as a request, not a guarantee: the child runs, and
+its result carries one warning naming the tools nobody registered plus the
+`subagentOnlyExtensions`/`extensions` remedy. The upstream intent — never
+pretend a tool exists — survives; the failure of a run that already did its
+work does not.
+
+**`reviewer` could not read a committed diff.** `watchdog_diff` reports the
+working tree, and the profile had no shell, so a review of `main...HEAD` was a
+review of `HEAD`. It gets `bash`, bounded in the prompt to reading: `git`
+history and diffs, `gh` issues and PRs, the repo's own test commands; nothing
+that stages, commits, pushes, checks out or edits. `acceptanceRole: read-only`
+already says the run changes nothing.
+
+Both profile edits live in this repo, not in the fork. A package may contribute
+agent directories (`pi.subagents.agents` in `package.json`), and a package
+agent outranks a builtin of the same name, so `agents/` here is where the
+profiles are versioned and the fork stays a behaviour patch. The cost is drift:
+each fork bump means diffing the bundled profiles against ours and re-applying
+a handful of lines.
+
+Considered and rejected: giving the role agents `codemode`. Our tools are
+script-only, but a child that *names* one in `tools` gets it activated and
+declared — measured on pi 1.4.0, a researcher listing `web_search` calls it
+directly — so codemode would add a tool, its declaration and a script layer to
+reach what naming already reaches. It also reaches nothing in a foreground
+child, which never loads the parent's ambient extensions. Same reasoning for
+`inheritSkills: true` on every profile: the catalog is 6.4k characters. Naming
+the one skill that pays, `skills: agent-browser` on `researcher`, costs one
+frontmatter line.
+
 ## The prompt carries the repeated instructions (2026-10)
 
 `SYSTEM.md` began as a 31-line "soul" and was cut to 8 lines when the package

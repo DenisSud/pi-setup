@@ -31,6 +31,12 @@ know before touching it.
   Never install `npm:pi-subagents` — upstream's `model-only` exposure declares
   `subagent` in every request and hides it from codemode. Upgrade by rebasing
   the branch onto the new upstream tag. See [README.md](README.md#subagents-come-from-a-fork).
+- **Our subagent profiles live in `agents/`**, declared under
+  `pi.subagents.agents` in `package.json`. They are copies of the profiles the
+  `pi-subagents` fork bundles, shadowing them by name (package beats builtin),
+  so a change there is a diff against upstream that has to be re-applied on
+  every fork bump. Keep the diff to the lines this setup needs and never fork a
+  whole prompt for style.
 - **Skills are user-invoked by default**: every `SKILL.md` sets
   `disable-model-invocation: true` unless the agent has to reach the skill on
   its own, or another skill does. The 14 that qualify drop the line and keep a

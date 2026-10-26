@@ -13,7 +13,12 @@
     ],
     "skills": [
       "./skills"
-    ]
+    ],
+    "subagents": {
+      "agents": [
+        "./agents"
+      ]
+    }
   },
   "dependencies": {
     "html-to-text": "10.0.1",
