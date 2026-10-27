@@ -1,5 +1,5 @@
 {
-  description = "Local model binaries for pi-setup (Indra OCR; Parakeet ASR next)";
+  description = "Local model binaries for pi-setup (Indra OCR, Parakeet ASR)";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   # Pinned by tag, and by flake.lock's rev. Bump both together.
@@ -15,6 +15,7 @@
     in {
       packages = forAll (pkgs: {
         indra-ocr = pkgs.callPackage ./nix/indra-ocr.nix { src = indra; };
+        asr = pkgs.callPackage ./nix/asr.nix { };
         default = self.packages.${pkgs.system}.indra-ocr;
       });
 
@@ -22,6 +23,10 @@
         indra-ocr = {
           type = "app";
           program = "${self.packages.${pkgs.system}.indra-ocr}/bin/indra-ocr";
+        };
+        asr = {
+          type = "app";
+          program = "${self.packages.${pkgs.system}.asr}/bin/pi-asr";
         };
         default = self.apps.${pkgs.system}.indra-ocr;
       });
