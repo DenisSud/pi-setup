@@ -313,3 +313,34 @@ The T3 Code tools in upstream (`watch_pull_request`, `delegate_task`,
 `AskUserQuestion`) do not exist here. The adaptation uses `tools.subagent` for
 the reviewer, `babysit-pr/scripts/pr-wait` for the watcher, and the existing
 `pr` skill for the PR body.
+
+## ASR: a pinned model, a chunker, and no torch (2026-10-27)
+
+`transcribe` shells out to `pi-asr`, built by `nix/asr.nix`. Three choices in
+that package are worth the ink.
+
+**The model is a fixed-output derivation, not a first-run download.** Indra
+downloads its 76 MB itself and that is fine for it. Parakeet is 640 MB, its
+export is a single Hugging Face commit
+(`csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8`), and the same files
+are already pinned by hash in `nixos-config` for the dictation engine. Pinning
+them makes the tool hermetic: no network inside a tool call, no half-finished
+cache, and a rebuild costs nothing. The cost is 640 MB of store per device,
+paid once at install.
+
+**The audio is cut at silence before it is decoded.** A NeMo TDT encoder
+attends over its whole input, so a 36-minute meeting is a quadratic attention
+matrix — tens of GB — and one slow decode. `pi_asr.py` runs a silero VAD over
+1 s frames, groups speech into spans of at most `--chunk-seconds` (30) with
+0.2 s of padding, and decodes each with the same recognizer instance. Measured
+on a 27-minute Telemost recording: 62 s wall, 88 utterances, 27x realtime on
+this Ryzen, and Russian and English in the same file come out in the right
+places. The spans double as the utterance times `timestamps: true` returns,
+which is why the tool did not need a second alignment pass.
+
+**No torch, no NeMo.** sherpa-onnx at int8 is a 2.5 MB Python package over the
+ONNX runtime nixpkgs already carries; the PyTorch route is 2 GB and slower for
+a 0.6B model. The trade is that the CLI is ours (`nix/asr/pi_asr.py`) rather
+than an upstream binary like Indra's, so the chunking logic lives here and the
+harness covers it. FFmpeg does the decoding, so any format and any video's
+audio track work without a second dependency.

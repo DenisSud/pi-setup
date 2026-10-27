@@ -48,6 +48,7 @@ cache of `origin/main` and pi deletes anything not pushed.
 | `calendar` | CalDAV (Radicale) tools: list/read/create/update/delete |
 | `gmail` | Gmail IMAP read + drafts only (no send, no delete-received) |
 | `ocr` | `ocr`: PDF/image → markdown with Indra OCR, locally (Nix package, CPU, no network) |
+| `asr` | `transcribe`: audio/video → text with Parakeet TDT 0.6B v3, locally (Nix package, CPU, no network) |
 
 Search is not an extension here. `web_search` comes from the npm package
 `pi-web-access`, configured in `~/.pi/agent/web-search.json` to try Exa first and
@@ -224,6 +225,15 @@ cached in `$XDG_CACHE_HOME/huggingface`). The `ocr` tool calls `indra-ocr` from
 Measured here: 2 s for a 30-page digital PDF, 5 s for a 1.2 MB scan, Russian and
 English text intact.
 
+Speech-to-text takes the other route on model delivery: [`nix/asr.nix`](nix/asr.nix)
+pins NVIDIA's Parakeet TDT 0.6B v3 (int8 ONNX export, CC-BY-4.0) and a silero
+VAD as fixed-output derivations, so `nix profile install ~/dev/pi-setup#asr`
+puts `pi-asr` on `PATH` with the model already in the store and no network at
+inference time. The tool cuts the audio at silence before decoding, because the
+encoder attends over its whole input. Measured here: 27x realtime on a Ryzen
+(27 min of meeting audio in 62 s), Russian and English in one recording, 25
+European languages auto-detected.
+
 ## Conventions
 
 - **One config file per extension**, in the agent dir: `env.json`, `gmail.json`,
@@ -242,6 +252,7 @@ English text intact.
 | `~/.pi/agent/env.json` | **the credentials**: environment variables for bash and the extensions (mode 600; path override `PI_ENV_CONFIG`) |
 | `~/.pi/agent/gmail.json` | Gmail address (required: `{"username": "…"}`) |
 | `~/.pi/agent/ocr.json` | optional; OCR binary name, timeout, output cap and artifact directory |
+| `~/.pi/agent/asr.json` | optional; transcription binary name, timeout, output cap, artifact directory and chunk length |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
 | `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions/lanes/remote machines off) |
 | `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages, and the `subagents.agentOverrides` skill lists above |

@@ -142,6 +142,10 @@ becomes a slower answer instead of a failed one. `~/.pi/agent/web-search.json`:
 - `ocr.json` — optional throughout: `command` (default `indra-ocr`), `timeoutMs`
   (default 300000), `maxChars` (default 20000), `artifactDir` (default
   `~/.pi/agent/tmp/ocr`). `OCR_CONFIG` overrides the path.
+- `asr.json` — optional throughout: `command` (default `pi-asr`), `timeoutMs`
+  (default 600000), `maxChars` (default 40000), `artifactDir` (default
+  `~/.pi/agent/tmp/asr`), `chunkSeconds` (default 30, the longest span decoded
+  at once; longer audio is cut at silence). `ASR_CONFIG` overrides the path.
 - `calendar.json` — optional throughout: `baseUrl` (default
   `https://cal.sudakov.site`), `collection` (default `/denis/main/`), `userVar` /
   `passwordVar` (default the `RADICALE_AGENT_*` pair), `timezone` (default
