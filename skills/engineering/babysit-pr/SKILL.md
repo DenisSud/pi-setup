@@ -84,9 +84,10 @@ If an overlapping PR makes this one obsolete, stop monitoring, report it to the
 user, and ask before closing the PR unless closure was explicitly authorized.
 
 If nothing has changed, stay quiet rather than posting filler comments. Stop
-when `pr-wait` exits 0 and the merge gate passes on the latest head. Merge only
-when the user explicitly requested it or `full-send` granted it; otherwise
-report that the PR is ready. Right before a merge, run `git fetch` and check the
-PR again. Never merge when it is BEHIND or DIRTY, or when base commits that
-landed after the last green run touch this PR's files. Rebase, push, and wait
-for green again.
+when `pr-wait` exits 0 and the latest head is ready: checks green, no
+unresolved threads, no requested changes. Report that the PR is ready. Do not
+merge unless the user explicitly asked for a merge in this request; `full-send`
+never grants one. Right before a merge, run `git fetch` and check the PR again.
+Never merge when it is BEHIND or DIRTY, or when base commits that landed after
+the last green run touch this PR's files. Rebase, push, and wait for green
+again.
