@@ -3,7 +3,6 @@ name: researcher
 description: Autonomous web researcher — searches, evaluates, and synthesizes a focused research brief
 tools: read, write, bash, web_search
 skills: agent-browser
-thinking: medium
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
