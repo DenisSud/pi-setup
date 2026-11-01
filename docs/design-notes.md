@@ -347,8 +347,9 @@ audio track work without a second dependency.
 
 ## One skill per phase, three agents (2026-11-01)
 
-This supersedes the count and the split in the two invocation notes above. The
-catalog went from 37 skills to 27: thirteen imported flows were cut and four
+This supersedes the count and the split in the two invocation notes above, and
+the merge grant in the tstack note: `full-send` now ends at a handoff, and the
+user merges. The catalog went from 37 skills to 27: thirteen imported flows were cut and four
 skills were added. The cut is `ask-matt`, `setup-matt-pocock-skills`,
 `to-tickets`, `implement`, `implement-spec`, `triage`, `wayfinder`,
 `code-review`, `full-stop`, `grill-with-docs`, `grilling`, `retro` and
