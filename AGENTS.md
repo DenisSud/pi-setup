@@ -1,5 +1,7 @@
 # pi-setup — notes for agents
 
+ship: local
+
 This repo is Denis's personal pi package: extensions, shared lib and skills,
 loaded from this checkout on each device. Read
 [README.md](README.md) for the human entry point and the
@@ -32,20 +34,21 @@ know before touching it.
   `subagent` in every request and hides it from codemode. Upgrade by rebasing
   the branch onto the new upstream tag. See [README.md](README.md#subagents-come-from-a-fork).
 - **Our subagent profiles live in `agents/`**, declared under
-  `pi.subagents.agents` in `package.json`. They are copies of the profiles the
-  `pi-subagents` fork bundles, shadowing them by name (package beats builtin),
-  so a change there is a diff against upstream that has to be re-applied on
-  every fork bump. Keep the diff to the lines this setup needs and never fork a
-  whole prompt for style. When a skill list is the only difference, use
-  `subagents.agentOverrides` in `settings.json` instead: upstream's prompt keeps
-  tracking, and there is nothing to re-diff.
+  `pi.subagents.agents` in `package.json`. `subagents.disableBuiltins` is `true`,
+  so this directory is the whole catalog: `reviewer`, `researcher`, `worker`.
+  All three are copies of the profiles the `pi-subagents` fork bundles,
+  shadowing them by name (package beats builtin). Keep the diff to the lines
+  this setup needs and never fork a whole prompt for style. A per-task skill or
+  tool loadout is a launch parameter (`skill`, `tools`), not an
+  `agentOverrides` block: there is nothing to re-diff.
 - **Skills are user-invoked by default**: every `SKILL.md` sets
   `disable-model-invocation: true` unless the agent has to reach the skill on
-  its own, or another skill does. The 19 that qualify drop the line and keep a
+  its own, or another skill does. The 17 that qualify drop the line and keep a
   trigger-shaped description; the split follows `mattpocock/skills` skill for
-  skill, so check upstream before flipping one. The four tstack skills are
-  advertised because their trigger is a spoken phrase, not a menu choice. See
-  [README](README.md#skills).
+  skill, so check upstream before flipping one. `full-send`, `review-loop` and
+  `babysit-pr` are advertised because their trigger is a spoken phrase, not a
+  menu choice. `npm run check:skills` guards the split, names and relative links;
+  a change to skills is done when it passes. See [README](README.md#skills).
 - **Model binaries are Nix packages**: an extension that needs a model runs a
   CLI built by `flake.nix` from `PATH` (configurable in its own agent-dir file,
   e.g. `ocr.json`), never a pip/venv install. A model is either pinned as a
@@ -56,7 +59,11 @@ know before touching it.
   A change is done when `harness` passes for every extension it touched, and
   `live` too when the change touches credentials or the network path.
 - **Commit messages**: `<scope>: <subject>` — `env:`, `gmail:`, `calendar:`,
-  `skills:`, `pi-setup:` (`git log` shows the style).
+  `skills:`, `agents:`, `pi-setup:` (`git log` shows the style).
+- **The workflow is three skills and a pointer**: `grill` → `spec github|local`
+  → `full-send <pointer>`. `full-send` never merges; github ends at an open PR,
+  local at pushed `main`. `review-loop` is the independent check, capped at 3
+  rounds. Do not add a second skill that re-derives one of these steps.
 
 ## Layout
 

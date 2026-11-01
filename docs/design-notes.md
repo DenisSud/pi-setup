@@ -344,3 +344,67 @@ a 0.6B model. The trade is that the CLI is ours (`nix/asr/pi_asr.py`) rather
 than an upstream binary like Indra's, so the chunking logic lives here and the
 harness covers it. FFmpeg does the decoding, so any format and any video's
 audio track work without a second dependency.
+
+## One skill per phase, three agents (2026-11-01)
+
+This supersedes the count and the split in the two invocation notes above. The
+catalog went from 37 skills to 27: thirteen imported flows were cut and four
+skills were added. The cut is `ask-matt`, `setup-matt-pocock-skills`,
+`to-tickets`, `implement`, `implement-spec`, `triage`, `wayfinder`,
+`code-review`, `full-stop`, `grill-with-docs`, `grilling`, `retro` and
+`skill-authoring`. The adds are `grill`, `spec` (replacing `to-spec`),
+`just-do-it` and `workflow-engineering`. `unslop` stays as the vendored design
+skill it is.
+
+**Why the cuts.** The workflow is six steps: grill, spec artifact, full-send,
+independent review, TLDR with `/show-me`, push back with `/just-do-it`. The
+imported tree had four ways to start the same conversation, two ways to write a
+ticket graph, two review skills and two stop points. A second skill that
+re-derives a step is a second place for the step to drift. So one skill owns
+each phase, a mode argument picks the variant, and the spec pointer carries the
+mode into the next session:
+
+- `grill` folds `grilling` + `grill-with-docs`: same rounds, same frontier, and
+  the glossary/ADR updates only when the repo already has them.
+- `spec` replaces `to-spec`: one artifact, `github` or `local`, no interview,
+  no ticket graph.
+- `full-send` owns both ends: github ends at an open, babysat PR; local ends at
+  pushed `main`. It never merges, so `full-stop` is gone.
+- `review-loop` absorbs `code-review`: the reviewer checks standards and spec
+  conformance in one pass, then rounds until it approves or the three-round
+  budget ends. A separate two-axis report was a second review path that
+  full-send had to remember to call.
+
+**The invocation split is now by phase, not by import.** A skill that starts or
+ends a phase is user-invoked (10); a skill that changes how a running task is
+done is model-invoked (17). The tstack spoken-phrase exception stays for
+`full-send`, `review-loop` and `babysit-pr`: the user says the phrase, so the
+model has to see the skill. The dependency rule that forced `tdd` and
+`code-review` to advertise no longer has a caller chain to satisfy; `tdd`,
+`diagnosing-bugs`, `domain-modeling`, `codebase-design`, `prototype`, `wizard`,
+`writing-for-agents`, `self-improvement`, `pr`, `agent-browser`, `latex-pdf`,
+`workflow-engineering`, `review-loop`, `babysit-pr`, `full-send`, `research` and
+`unslop` advertise because the situation, not the menu, is the trigger.
+
+**Both research skills stay.** `research` is one background reader for one
+question. `deep-research` is the six-stage graph: parallel searchers, a coverage
+judge, one writer, an audit that refetches every citation, a revise pass. They
+overlap in the `researcher` agent and the citation discipline, not in shape or
+cost. A merged skill either hides the cheap path inside a 15x graph or makes the
+audited graph look optional. The routing line is one sentence in each.
+
+**Three agents, one catalog.** `disableBuiltins: true` makes `agents/` the whole
+list: `reviewer`, `researcher`, `worker`. The worker is upstream verbatim; the
+reviewer loses `watchdog_diff` and the supervisor channel, the researcher loses
+`thinking: medium`. `subagents.defaultModel` +
+`subagents.defaultThinking` pin all three to DeepSeek V4.1 Flash at high, and
+the per-agent thinking lines, the `review-loop` model argument and the
+deep-research `args.model` are gone. The per-task loadout is a launch
+parameter: `skill` (upstream) and `tools` (fork patch). `agentOverrides` is
+empty: copying a profile for a skill list is the drift this removes.
+
+**Workflow scripts stay on.** `deep-research` is the proof that the graph is
+worth the feature, so `workflow-scripts` is not in `disabledFeatures`. The new
+`workflow-engineering` skill is the general form: the five patterns, the
+`runs.run`/`runs.all`/`runs.lanes` API, the per-task loadout, one writer per
+tree, structured verdicts, and a pre-launch checklist.

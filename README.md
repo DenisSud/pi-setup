@@ -65,30 +65,62 @@ fall back to the local SearXNG. See
 
 ### Skills
 
-`skills/` holds the skills the agent discovers: `engineering/`,
+`skills/` holds the 27 skills the agent discovers, grouped as `engineering/`,
 `productivity/`, `design/`, `creative/`, and tool skills at the top level
-(`agent-browser`, `ascii-animation`, …).
-Vault-only skills (``daily-planning``, ``weekly-review``, ``ocw-vault``) live in
-the vault itself: `~/Documents/Notes/.pi/skills/`.
-Each skill is a directory with a `SKILL.md` whose frontmatter names it and
-describes it. The invocation split comes from [`mattpocock/skills`](https://github.com/mattpocock/skills),
-where most of these files started, and is copied rather than re-derived: a
-**user-invoked** skill orchestrates a flow the human picks, so it sets
-`disable-model-invocation: true` and keeps a human-facing one-line description;
-a **model-invoked** skill holds reusable discipline the agent has to reach on
-its own, keeps a routing description with trigger branches, and is the only
-kind another skill can call. 19 are model-invoked here, 19 are not.
+(`agent-browser`, `ascii-animation`, …). Vault-only skills (``daily-planning``,
+``weekly-review``, ``ocw-vault``) live in the vault itself:
+`~/Documents/Notes/.pi/skills/`.
 
-The skills that are ours alone follow the same test: `agent-browser`,
-`latex-pdf` and `self-improvement` are advertised, `ascii-animation`,
-`show-me` and `skill-authoring` are not.
+**The workflow is three skills and a pointer.**
 
-`full-send`, `full-stop`, `review-loop` and `babysit-pr` are adapted from
-[`t3dotgg/tstack`](https://github.com/t3dotgg/tstack) (MIT, credited in each
-skill directory). They advertise because their trigger is a spoken phrase
-("full send", "full stop", "review loop", "babysit"), not a flow picked from a
-menu. `full-send` is the only skill here that grants merge authority, and only
-on an explicit request; `full-stop` stops at a ready PR.
+1. `/grill` interviews in rounds until the goal, the decisions and the success
+   criteria are shared. It leaves the repo's `GLOSSARY.md` and ADRs current when
+   they exist.
+2. `/spec github` publishes one issue; `/spec local` writes one file under
+   `/tmp`. The artifact carries the problem, the observable success criteria,
+   the approach, the proof plan and what is out of scope. No ticket graph.
+3. A fresh session runs `/full-send <pointer>`. The pointer is the mode: an
+   issue number or URL is github, a file path is local. `full-send` implements,
+   proves, runs `review-loop` (max 3 rounds), then opens and babysits a PR
+   (github) or commits and pushes `main` (local). It never merges.
+
+`/review-loop` is the independent check: one fresh `reviewer`, standards and
+spec conformance, at most three rounds. `/show-me` expands a TLDR into the
+detail. `/just-do-it` overrides the default push-back when the remaining
+questions are the agent's to decide.
+
+**The invocation split.** A user-invoked skill starts or ends a phase the human
+picks: it sets `disable-model-invocation: true` and keeps a human-facing
+description. A model-invoked skill changes how a running task is done: the agent
+has to reach it on its own, keeps a trigger-shaped description, and is the only
+kind another skill can call. The split follows
+[`mattpocock/skills`](https://github.com/mattpocock/skills) skill for skill.
+
+The tstack flows are the spoken-phrase exception: `full-send`, `review-loop` and
+`babysit-pr` advertise because "full send", "review loop" and "babysit" are
+triggers, not menu choices; hiding them recreates the failure where the user
+says the phrase and the model cannot see the rules.
+
+**Model-invoked (17):** `agent-browser`, `babysit-pr`, `codebase-design`,
+`diagnosing-bugs`, `domain-modeling`, `full-send`, `latex-pdf`, `pr`,
+`prototype`, `research`, `review-loop`, `self-improvement`, `tdd`, `unslop`,
+`wizard`, `workflow-engineering`, `writing-for-agents`.
+
+**User-invoked (10):** `ascii-animation`, `deep-research`, `grill`, `handoff`,
+`improve-codebase-architecture`, `just-do-it`, `show-me`, `spec`, `teach`,
+`wait-what`.
+
+Research has two sizes. `research` is one background reader for one question.
+`deep-research` is the six-stage graph in
+[`skills/engineering/deep-research/`](skills/engineering/deep-research/):
+parallel searchers, a coverage judge, a single writer, and an audit that
+refetches every cited source. Use the first for a lookup, the second when the
+answer needs many sources and an audited report. Merging them would bury the
+cheap path.
+
+`workflow-engineering` is the reference for fan-out: when a graph beats one
+child, the five patterns, the `runs.run`/`runs.all`/`runs.lanes` API, the
+per-task loadout, and the pre-launch checklist.
 
 `unslop` comes from [`heydamir/unslop`](https://github.com/heydamir/unslop)
 (CC BY 4.0, credited in its directory) and advertises for the same reason: its
@@ -98,42 +130,40 @@ NixOS config, and the skill falls back to system chromium through `CHROME_PATH`.
 
 ### Agent profiles
 
-`agents/` holds the subagent profiles this setup overrides, declared in
+`agents/` holds the subagent profiles this setup runs, declared in
 `package.json` under `pi.subagents.agents` so pi-subagents discovers them as
 package agents — source priority 1, above the fork's builtin profiles of the
-same name:
+same name. `subagents.disableBuiltins` is `true`, so this directory is the whole
+catalog; nothing else appears in the agent list.
 
 | profile | what this setup changes |
 |---|---|
-| `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. `pi-web-access` ships `fetch_content`, `get_search_content` and `source_check` beside `web_search` and the child gets none of them: a page is read with `curl -sL`, and the skill covers what needs a browser |
-| `reviewer` | adds `bash`, so a committed range is readable: `git diff main...HEAD`, `git log`, `gh issue view`. Without it a review of a branch could only see the working tree |
+| `reviewer` | read-only, with `bash` for `git diff`, `git log`, `gh issue view` and the repo's own test commands. No `watchdog_diff`, no supervisor channel: it reports and stops. |
+| `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. `pi-web-access` ships `fetch_content`, `get_search_content` and `source_check` beside `web_search` and the child gets none of them: a page is read with `curl -sL`, and the skill covers what needs a browser. |
+| `worker` | upstream's profile verbatim: the single writer, `contact_supervisor` for a decision it cannot make, fresh context, `progress.md`. |
 
-Both are copies of the bundled profiles, not new agents: the diff is a couple
-of frontmatter lines and the prompt sentences that depended on the tools this
-setup does not have. A fork bump means diffing the bundled files against these
-and re-applying the change, the same way the fork itself is rebased.
+All three inherit `opencode-go/deepseek-v4.1-flash` at `high` from
+`subagents.defaultModel` and `subagents.defaultThinking`. No profile pins a
+model or a thinking level, and no skill passes a `model` argument. That is the
+whole policy; a per-run override still exists in the fork and is not used.
 
-Skills for the other role agents are an override, not a copy: the profile is
-upstream's, only its skill list changes, so `settings.json` carries it and
-there is nothing to re-diff on a rebase.
+A per-task loadout is a launch parameter, not a copy of the profile:
 
-```json
-"subagents": {
-  "agentOverrides": {
-    "worker":   { "skills": ["tdd", "diagnosing-bugs", "codebase-design"] },
-    "delegate": { "skills": ["tdd", "diagnosing-bugs", "codebase-design"] },
-    "oracle":   { "skills": ["codebase-design", "domain-modeling"] }
-  }
-}
+```js
+await tools.subagent({
+  agent: "worker",
+  task: "Implement the parser change",
+  skill: ["tdd"],                       // upstream parameter
+  tools: ["read", "write", "edit", "bash"], // fork patch: narrows the profile
+  worktree: true,                       // one writer per tree
+  output: "/tmp/parser/result.md",
+});
 ```
 
-A child sees a skill's name, description and path, not its body: `tdd` costs
-149 characters of its prompt until the task matches, and then it reads the
-file. `inheritSkills: true` instead would hand every child all 19
-model-invoked skills (8.4k characters, ~2.1k tokens) including the ones whose
-flow assumes a human (`grilling`, `wizard`, `full-send`) and the one that fans out more
-subagents (`code-review`), which a child cannot do. `reviewer` and `scout` get
-none: a review does not improve by being told how to write a test first.
+`skill` overrides the profile's skill list for that child. `tools` replaces its
+tool allowlist. The worker copy exists because `disableBuiltins` removes the
+builtin; it is the same file, so a fork bump is a diff against upstream and
+nothing more.
 
 ### Prompt and tool set
 
@@ -141,17 +171,15 @@ The package is built to keep the request small. Nothing here is declared to
 the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
-it when the name is unknown). Only the 19 model-invoked skills are advertised,
-and only as name, description and path: 8.4k characters, ~2.1k tokens on pi
-1.4.0. All 37 would be ~14.5k characters, ~3.6k tokens. `SYSTEM.md` in this repo
+it when the name is unknown). Only the 17 model-invoked skills are advertised,
+and only as name, description and path: 5.8k characters, ~1.5k tokens on pi
+1.4.0. All 27 would be 8.3k characters, ~2.1k tokens. `SYSTEM.md` in this repo
 is the prompt.
 
-Measured on pi 1.3.0, one trivial prompt from `/tmp`: 1.76k input tokens —
-against ~11.3k for a prompt that declares 26 tools and lists 32 skills. After
-the longer `SYSTEM.md` (344 words) and the 14 advertised skills, pi 1.4.0
-reported 4.04k input tokens for the same probe, with the skills section at 6.4k
-characters; the four tstack skills raise that section to 7.7k. The script-only shape is still about three times smaller than the
-declaring one.
+The script-only shape is still about three times smaller than declaring the
+tools. The trade is explicit: the agent does not suggest a skill, and nothing in
+the prompt says a calendar exists. The user, a skill body, or a `searchTools()`
+call has to name the tool.
 
 A device matches that shape with three things in `~/.pi/agent`:
 
@@ -169,10 +197,6 @@ ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/SYSTEM.md ~/.pi/agent/SYSTEM
 for a session that should not need a script; `codemode` lists them in the
 codemode description instead.
 
-The trade is explicit: the agent does not suggest a skill, and nothing in the
-prompt says a calendar exists. The user, a skill body, or a `searchTools()`
-call has to name the tool.
-
 ### Subagents come from a fork
 
 `subagent`, `bg_wait`, `subagent_supervisor` and `contact_supervisor` come from
@@ -184,10 +208,11 @@ activating script-only tools (naming one in `setActiveTools()` would only
 declare it), and its two skills carry `disable-model-invocation: true` so
 `/skill:council-mode` still works. The second: a child tool that no loaded
 provider registered is a warning on the child's result, not a failed run
-(issue #4).
+(issue #4). A third patch adds the per-call `tools` allowlist used above; a
+fourth adds `space` pause to the fleet inspector, with resume left explicit.
 
-No setting can do this: `-subagent` removes the tool from codemode too
-(`tools.subagent` is then undefined), and the package has no exposure knob.
+No setting can do the exposure change: `-subagent` removes the tool from codemode
+too (`tools.subagent` is then undefined), and the package has no exposure knob.
 Hence a fork rather than a config line. Child agents still get declared tools —
 only the parent-facing registrations changed.
 
@@ -196,22 +221,28 @@ What the fork offers is then narrowed per device in
 
 ```json
 {
-  "disabledFeatures": ["missions", "lane-management", "lane-metadata", "external-machines"],
+  "disabledFeatures": [
+    "missions", "lane-management", "lane-metadata", "external-machines",
+    "agent-management", "watchdog", "panes", "preflight", "gates",
+    "usage-budgets", "tool-budgets", "control-overrides",
+    "extension-bindings", "spawn-budget-grants"
+  ],
   "missions": { "enabled": false },
   "scheduledRuns": { "enabled": false }
 }
 ```
 
-That keeps workflow scripts, the budget/control knobs and agent management, and
-drops missions (which otherwise records every delegation), worktrees/lanes and
-remote machines: those actions disappear from the unknown-action list and their
+That keeps workflow scripts, the per-task loadout, status/control and worktree
+isolation, and drops missions, lane management, remote machines, agent
+management, the watchdog, panes, preflight, gates, budgets and extension
+bindings: those actions disappear from the unknown-action list and their
 parameters are rejected with an error naming the setting. It does **not** shrink
 the prompt — `disabledFeatures` trims the tool declaration, which a deferred
 tool never sends — so it is a guardrail, not a saving.
 
 To follow a new upstream release: rebase `pi-setup` onto the new tag, keep the
-`SCRIPT_ONLY_TOOL` replacements, push, then `pi update --extensions` on each
-device.
+`SCRIPT_ONLY_TOOL` replacements, the `tools` patch and the fleet pause, push,
+then `pi update --extensions` on each device.
 
 ### Local models (Nix)
 
@@ -260,8 +291,8 @@ European languages auto-detected.
 | `~/.pi/agent/ocr.json` | optional; OCR binary name, timeout, output cap and artifact directory |
 | `~/.pi/agent/asr.json` | optional; transcription binary name, timeout, output cap, artifact directory and chunk length |
 | `~/.pi/agent/calendar.json` | optional; sensible defaults for cal.sudakov.site |
-| `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions/lanes/remote machines off) |
-| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages, and the `subagents.agentOverrides` skill lists above |
+| `~/.pi/agent/extensions/subagent/config.json` | which pi-subagents features stay reachable on this device (missions, lanes, remote machines, management, budgets off) |
+| `~/.pi/agent/settings.json` | pi's own settings: model, theme, packages, and the `subagents` block (`disableBuiltins`, `defaultModel`, `defaultThinking`) |
 | `~/.pi/agent/security.json.retired` | the old vault mapping (variable → Bitwarden item); safe to delete |
 
 Per-device files are not in git. On a new machine, copy them over.

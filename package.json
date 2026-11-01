@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Denis's personal pi package: extensions and skills, installed by ~/.pi/agent.",
+  "scripts": {
+    "check:skills": "node scripts/check-skills.mjs"
+  },
   "keywords": [
     "pi-package"
   ],
