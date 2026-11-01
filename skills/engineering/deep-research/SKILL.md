@@ -26,7 +26,8 @@ produced the question. There is no `fetch_content` and no `source_check` in this
 setup: the `curl` recipe inside the script is how a page gets read.
 
 **Cost.** `plan` length + 3 to +6 children, and roughly 15× the tokens of a chat
-turn. A question one search answers is a bad fit — answer it directly and say why.
+turn. A question one search answers is a bad fit — use `research` for that, or
+answer it directly and say why.
 
 ## 1. Write the brief
 
@@ -110,8 +111,9 @@ is the one copy and an edit between stages reaches the next one.
 
 `rounds`: `2` unless the question is narrow enough that one pass cannot leave a
 hole. `tier`: `light` for a quick scan, `standard`, `deep` for a contested or
-high-stakes question — it sets how many searches each searcher spends. `model`,
-optional, overrides the model for every child.
+high-stakes question — it sets how many searches each searcher spends. Every
+child inherits the setup default model and thinking level; there is no model
+argument.
 
 It returns a receipt at once and the completion wakes you. Read the summary it
 brings: it names the stages that failed.

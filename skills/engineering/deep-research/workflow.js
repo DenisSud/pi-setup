@@ -14,11 +14,9 @@
 //   outdir     absolute run directory, created by the parent, holding brief.md
 //   plan       [{ id, question, angle? }] — id must match [A-Za-z0-9][A-Za-z0-9._-]*
 //   rounds     1 or 2 fan-out rounds (default 1)
-//   model      optional provider/id override for every child
 //   tier       "light" | "standard" | "deep", sets per-searcher effort
 
 const outdir = String(args.outdir || "").replace(/\/+$/, "");
-const Model = args.model ? String(args.model) : "";
 const tier = String(args.tier || "standard");
 const rounds = Math.max(1, Math.min(2, Number(args.rounds || 1)));
 const plan = (Array.isArray(args.plan) ? args.plan : []).filter(
@@ -37,8 +35,7 @@ const briefPath = outdir + "/brief.md";
 // Every child is its own context: no child inherits the parent's transcript, so
 // a stage judges the brief and the files, not the conversation that produced it.
 function child(spec) {
-	const base = { context: "fresh", ...spec };
-	return Model ? { ...base, model: Model } : base;
+	return { context: "fresh", ...spec };
 }
 
 function seekTask(item) {

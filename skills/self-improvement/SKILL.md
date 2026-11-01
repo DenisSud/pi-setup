@@ -18,7 +18,7 @@ Done when the procedure has a name and you have said it in one sentence.
 
 ## Skill
 
-Write it to your own `skills/<name>/SKILL.md` (guide: base `skill-authoring`),
+Write it to your own `skills/<name>/SKILL.md` (guide: base `writing-for-agents`),
 commit it in your repo, and say in chat what you added and why. The skill is
 the default rung: cheap, reversible, and it fires when its description matches.
 

@@ -1,6 +1,6 @@
 ---
 name: full-send
-description: Use only when the user says "full send", or explicitly grants autonomy to carry the current change to a merged PR without further input. Runs proof, review, PR filing, babysitting, and the merge gate to completion.
+description: "Carry a spec to shipped: implement, prove, review up to 3 rounds, then open and babysit a PR (github) or commit and push main (local). Never merges. Use when the user says 'full send' or grants autonomy to ship the current spec. Argument: issue number/URL, spec path, or a mode override."
 metadata:
   credits:
     skill: full-send
@@ -9,131 +9,136 @@ metadata:
     url: "https://github.com/t3dotgg/tstack/blob/main/skills/full-send/SKILL.md"
 ---
 
-# Full Send
+# Full send
 
-If the user triggered this, it's because they are not watching this thread, and
-they want you to complete the work end-to-end autonomously. Your updates and
-your final message go unread until long after you stop. You own the work from
-its current state to a merged PR.
+The user is not watching. Own the work from the spec to the handoff. Their next
+message is your report.
 
-If the user did not explicitly request "full send" in some clear way, do not
-assume full autonomy. If they did, everything below applies.
+A full-send request authorizes the work, the test methods Proof needs, and the
+push or PR. It does not authorize a merge, a force-push outside this task's
+branch, or anything destructive outside the repo.
 
-This request is the authorization. It overrides the default "branch, push, PR,
-do not merge" rule for this task only. It does not override a repository's own
-instructions about how to work.
+## 1. Read the pointer
 
-The user grants you permission to:
+The argument is the spec:
 
-- Merge the PR once the merge gate passes.
-- Force-push the PR's own branch with `--force-with-lease` after a rebase.
-- Use the test methods that Proof needs, without asking first.
+- An issue number, `owner/repo#123`, or an issue URL → **github** mode.
+- A path to an existing file → **local** mode.
+- `github` or `local` as the first token → override the mode, then read the
+  pointer that follows.
+- No argument → the current conversation is the spec. Take the mode from the
+  repo's `AGENTS.md` (`ship: local` or `ship: pr`); if there is no marker, use
+  `ship: pr` and say so.
 
-## Testing permission
+Fetch the spec and restate its goal and success criteria in three lines before
+touching code. A spec with no observable success criteria is a blocker: ask for
+them, question first, and stop.
 
-A "full send" request is the permission. If a project file or other
-instruction says to ask before a test method, or to leave testing to the
-user, this request replaces that rule for this task.
+`ship: local` means commit and push `main`, no branch, no PR. `ship: pr` means a
+branch and a PR. `pi-setup` and `nixos-config` are `ship: local`.
 
-That includes ask-first rules for computer use, browser automation,
-simulators and devices, running the app or a dev server, screenshots, and
-visual checks. Use the method that gives direct proof. List it in the
-report.
+## 2. Preflight
 
-Rules about how to test still apply. Follow rules that name the correct
-command, fixture, or check. This permission only removes the ask-first or
-leave-it-to-the-user step. If a preferred method cannot prove the change,
-use a gated method under this permission.
+```bash
+git status --short
+git fetch origin
+git rev-parse --abbrev-ref HEAD
+git rev-parse --short HEAD
+```
 
-It covers only the tests needed for this task. It does not add permission
-for the steps under "Asking the user", such as production changes or data
-deletion. It also does not bypass a harness or system approval prompt if
-one appears.
+- The tree must be clean, or contain only changes that belong to this spec. A
+  local-mode repo with unrelated changes stops here; do not stash, discard, or
+  commit them.
+- Find the default branch (`git symbolic-ref refs/remotes/origin/HEAD` or
+  `gh repo view --json defaultBranchRef`).
+- **github**: create a branch from `origin/<default>` (`git switch -c
+  spec/<slug> origin/<default>`), or use the current branch if it is already
+  this task's branch and is ahead of the default by only this work.
+- **local**: stay on `main`. If it is behind `origin/main`, fast-forward. If it
+  has diverged, stop and report.
 
-## Steps
+## 3. Implement
 
-1. **Finish the change.** Complete the goal from the user's request with the
-   smallest change that works. Fix the case that happened, not every case
-   that could. If you are on the default branch, create a branch first. The
-   exception is a repository whose own instructions say to commit to the
-   default branch: `pi-setup` and `nixos-config` do.
-2. **Prove it.** Get proof for every change you made. See "Proof".
-3. **Review it.** Read `../review-loop/SKILL.md` and run it. If the work came
-   from a spec or tickets, read `../code-review/SKILL.md` and run it first;
-   fix or dismiss its findings before the loop.
-4. **File the PR** with the `pr` skill: read `../pr/SKILL.md` and follow it.
-   Rebase onto the latest default branch first. Open a real PR with
-   `gh pr create` (not a draft) so checks run. Add one short line to the
-   description that says how you proved the change.
-5. **Babysit the PR**: read `../babysit-pr/SKILL.md` and follow it. Fix real
-   findings and CI failures. Get proof for each fix before you push it.
-6. **Merge** when the merge gate passes.
-7. **Report** in your final message: the PR link, the merge commit, your proof,
-   and each decision you made for the user.
+Read the spec and the code it names. Make the smallest change that meets the
+success criteria. Follow the repo's existing patterns.
 
-Stay active from step 1 to step 7. If you end your turn while checks or bots are
-pending, the work stops, because nobody will prompt you again. Run the watcher
-from `babysit-pr` in the foreground with a long timeout, so the turn stays open.
-If the command returns, handle the event and start it again.
+- Read `../tdd/SKILL.md` when the change has a testable seam.
+- Read `../diagnosing-bugs/SKILL.md` when the task starts from a failure.
+- Read `../workflow-engineering/SKILL.md` only when the work splits into
+  independent fan-out. One writer per tree; parallel writers get worktrees.
+- Commit in atomic slices as you go. Do not leave the tree dirty at the end.
 
-## Proof
+## 4. Prove
 
-Proof is evidence you observed yourself in this session: command output, a
-reproduction, a screenshot. Use the most direct proof the change allows:
+Proof is evidence you observed in this session: command output, a reproduction,
+a screenshot. Use the most direct proof the change allows.
 
-- Reproduce the original failure, apply the fix, then watch the same
-  reproduction pass.
-- Run the checks that the repo's CI runs (typecheck, lint, tests).
-- Add one focused test that fails without the fix, when the behavior has none
-  and the repo has a test setup.
-- For UI and runtime behavior, run the app and look at the change. Green mocked
-  tests do not prove that the user experience works. Attach screenshots to the
-  PR when they help and you have a way to upload them.
+- Reproduce the original failure, apply the fix, watch the same reproduction
+  pass.
+- Run the checks CI runs: typecheck, lint, tests. Run the focused test first,
+  then the full suite once.
+- For UI or runtime behavior, run the app and look at it. Green mocked tests do
+  not prove the experience.
+- Record the exact commands and their output for the report.
 
-When you cannot find a way to prove a change, you do not have full confidence.
-Ask the user.
+If you cannot prove the change, stop and ask. Do not ship on confidence.
 
-## Merge gate
+## 5. Review
 
-Full confidence means all of these are true on the latest commit:
+Read `../review-loop/SKILL.md` and run it on the diff against the base. It uses
+one fresh reviewer, checks standards and spec conformance, and caps at three
+rounds. Fix real findings; decline nits with a written reason. Do not push while
+the loop runs.
 
-- Your proof covers every change in the diff.
-- `review-loop` returned APPROVE on the current behavior diff.
-- If a spec or tickets exist, `code-review` findings are fixed or dismissed.
-- Required checks are green.
-- Review bots have finished, and each finding is fixed or dismissed with a
-  written reason.
-- No human review still requests changes.
-- The branch is up to date with the default branch, and GitHub reports it as
-  mergeable.
+Budget end is not approval. If a finding is still disputed, put both sides in
+the report and stop; the user decides.
 
-Merge with the method the repo uses. Check the allowed methods and recent merged
-PRs. If the repo uses a merge queue or auto-merge, stay until GitHub reports the
-PR as merged. Merge through branch protection as configured. Never use `--admin`
-or other bypasses. You can dismiss an automated review that requests "needs human review" only
-with a written reason and evidence. A human review that requests changes is
-never dismissible.
+## 6. Ship
 
-## Asking the user
+**github**
 
-A question in a normal message does not interrupt the user, and the thread looks
-done. This setup has no question tool, so the stopped turn is the signal: put
-the question first in your final message, then stop. Put all the context in the
-question: the PR link, what blocks you, and the options with your
-recommendation first.
+1. Rebase onto the latest default: `git fetch origin && git rebase
+   origin/<default>`. Resolve conflicts; re-run proof after a meaningful
+   conflict fix.
+2. Push the branch. Use `--force-with-lease` only if you rebased a branch you
+   already pushed, never on the default branch.
+3. Write the PR body with `../pr/SKILL.md`. Open a real PR with `gh pr create`
+   (not a draft). Add one line saying how you proved it.
+4. Read `../babysit-pr/SKILL.md` and follow it. Keep the turn open with the
+   watcher, fix real findings and CI failures, and get proof for each fix.
+5. Stop when the PR is ready. Leave it open and unmerged.
 
-Ask only when you cannot continue alone:
+Never merge, enable auto-merge, enter a merge queue, or bypass branch
+protection. If auto-merge or a queue is already armed, disable it and report
+that. If someone else merges while you watch, report it and stop.
+
+**local**
+
+1. Stage only the spec's files. Commit atomically.
+2. Rebase onto `origin/main` if it moved. Re-run proof after a conflict fix.
+3. `git push origin main`. No force-push. If the push is rejected, fetch and
+   retry once; if it still fails, stop and report.
+4. No PR. The pushed `main` is the handoff.
+
+## 7. Report
+
+TLDR first:
+
+- Spec: issue link or file path; mode.
+- What changed: `git diff --stat <base>`.
+- Proof: the commands and what they showed.
+- Review: rounds, verdict, fixed and declined findings.
+- Shipped: PR link or pushed commit sha.
+- Decisions you made for the user.
+- Follow-ups: declined nits and anything out of scope.
+
+## Ask only when blocked
 
 - You cannot prove the change.
-- The merge gate cannot pass, and you cannot fix that yourself.
-- The next step is outside the grant above: deleting data, touching production,
-  changing things outside the repo, closing a PR, or force-pushing any other
-  branch.
-- The goal is ambiguous in a way that changes the result.
-- Another PR makes this one obsolete.
+- The spec's goal is ambiguous in a way that changes the result.
+- The next step is destructive or outside the repo: deleting data, touching
+  production, closing someone else's PR, force-pushing another branch.
+- A conflict or a failing check cannot be fixed without a decision.
 
-Decide everything else yourself with sensible defaults, and list those decisions
-in the report.
-
-If the user does not answer, take the safe path: leave the PR open and unmerged,
-and start your final message with the question.
+Put the question first, with the context and your recommendation, then stop.
+Everything else: decide with a sensible default and list it in the report.
