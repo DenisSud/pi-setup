@@ -17,10 +17,8 @@ the second opinion; the parent owns the fix.
 ## Budget
 
 - Three rounds total. Round 1 is full. Later rounds check only changed code and
-  open findings.
-- Extend to five only for security, permissions, auth, data loss, or
-  state/concurrency, while a blocker or should stays open with evidence. Or when
-  the user asks.
+  open findings. Extend only when the user asks; a security or data-loss finding
+  does not buy a fourth round on its own.
 - Stop early if a round returns only nits. A declined nit, or a comment, doc, or
   format-only fix, needs no new round.
 - One reviewer only. It must not start subagents or reviewers.
