@@ -397,7 +397,8 @@ audited graph look optional. The routing line is one sentence in each.
 
 **Three agents, one catalog.** `disableBuiltins: true` makes `agents/` the whole
 list: `reviewer`, `researcher`, `worker`. The worker is upstream verbatim; the
-reviewer loses `watchdog_diff` and the supervisor channel, the researcher loses
+reviewer loses `watchdog_diff` and the supervisor channel and carries
+`codebase-design` as its one always-on skill, the researcher loses
 `thinking: medium`. `subagents.defaultModel` +
 `subagents.defaultThinking` pin all three to DeepSeek V4.1 Flash at high, and
 the per-agent thinking lines, the `review-loop` model argument and the

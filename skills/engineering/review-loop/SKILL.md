@@ -68,6 +68,11 @@ restate the format in the brief. Do not edit scoped files while review runs.
 Wait for the result. Do not poll or start a second reviewer. A timeout, an
 error, or no reply is not approval.
 
+The profile carries `codebase-design`: the deep-module terms are the standards
+lens a diff review needs. Two more are per-task, so they go in the launch call:
+`skill: "writing-for-agents"` when the diff changes a skill or an `AGENTS.md`,
+and `skill: "domain-modeling"` when it changes a `GLOSSARY.md` or an ADR.
+
 ### Round 1 brief
 
 ```
