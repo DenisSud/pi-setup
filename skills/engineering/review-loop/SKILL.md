@@ -56,15 +56,17 @@ const result = await tools.subagent({
 text(result);
 ```
 
-Do not pass a model. The reviewer inherits the setup default: DeepSeek V4.1
-Flash at high thinking, the same family as the parent. The fresh context and the
-brief are the second opinion; the round budget caps the cost. Same-family review
-shares the parent's blind spots, so this is not a substitute for a
-different-family check on a risky change.
+Do not pass a model. The reviewer inherits `subagents.defaultModel` and
+`defaultThinking` from `settings.json`: the same family as the parent. The fresh
+context and the brief are the second opinion; the round budget caps the cost.
+Same-family review shares the parent's blind spots, so this is not a substitute
+for a different-family check on a risky change.
 
-The child gets no history, so the brief carries everything. Do not edit scoped
-files while review runs. Wait for the result. Do not poll or start a second
-reviewer. A timeout, an error, or no reply is not approval.
+The child gets no history, so the brief carries everything. Its reply format is
+its own (`agents/reviewer.md`): verdict first, one stable id per finding. Do not
+restate the format in the brief. Do not edit scoped files while review runs.
+Wait for the result. Do not poll or start a second reviewer. A timeout, an
+error, or no reply is not approval.
 
 ### Round 1 brief
 
@@ -88,15 +90,6 @@ Read the surrounding code. Check two axes:
 
 Find bugs, broken callers, and tests that cannot fail. Hold to the smallest
 change. Flag code, tests or guards the spec does not need.
-
-blocker = the intended case is wrong.
-should = a real bug callers will hit, inside the intent.
-nit = everything else.
-
-Reply:
-VERDICT: APPROVE or CHANGES
-S1 [blocker|should|nit] <file>:<line> <claim>. Fix: <suggestion>
-Use stable ids. Say exactly "No issues found." when nothing qualifies.
 ```
 
 ## 3. Answer findings
