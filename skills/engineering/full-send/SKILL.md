@@ -1,6 +1,6 @@
 ---
 name: full-send
-description: "Carry a spec to shipped: implement, prove, review up to 3 rounds, then open and babysit a PR (github) or commit and push main (local). Never merges. Use when the user says 'full send' or grants autonomy to ship the current spec. Argument: issue number/URL, spec path, or a mode override."
+description: "Carry a spec to shipped: implement, prove, review up to 3 rounds, then open a PR (github) or commit and push main (local). Never merges. Use when the user says 'full send' or grants autonomy to ship the current spec. Argument: issue number/URL, spec path, or a mode override."
 metadata:
   credits:
     skill: full-send
@@ -104,13 +104,12 @@ the report and stop; the user decides.
    already pushed, never on the default branch.
 3. Write the PR body with `../pr/SKILL.md`. Open a real PR with `gh pr create`
    (not a draft). Add one line saying how you proved it.
-4. Read `../babysit-pr/SKILL.md` and follow it. Keep the turn open with the
-   watcher, fix real findings and CI failures, and get proof for each fix.
-5. Stop when the PR is ready. Leave it open and unmerged.
+4. Stop at the open PR. Watching it is the user's call: `/babysit` when they
+   want it. Do not start the watcher, and do not wait for CI in this turn.
 
 Never merge, enable auto-merge, enter a merge queue, or bypass branch
 protection. If auto-merge or a queue is already armed, disable it and report
-that. If someone else merges while you watch, report it and stop.
+that. If someone else merges it, report it and stop.
 
 **local**
 

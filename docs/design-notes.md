@@ -369,8 +369,9 @@ mode into the next session:
   the glossary/ADR updates only when the repo already has them.
 - `spec` replaces `to-spec`: one artifact, `github` or `local`, no interview,
   no ticket graph.
-- `full-send` owns both ends: github ends at an open, babysat PR; local ends at
-  pushed `main`. It never merges, so `full-stop` is gone.
+- `full-send` owns both ends: github ends at an open PR, local ends at pushed
+  `main`. It never merges, so `full-stop` is gone. (2026-11-02: it no longer
+  babysits — watching a PR is the user's call, `/babysit`.)
 - `review-loop` absorbs `code-review`: the reviewer checks standards and spec
   conformance in one pass, then rounds until it approves or the three-round
   budget ends. A separate two-axis report was a second review path that

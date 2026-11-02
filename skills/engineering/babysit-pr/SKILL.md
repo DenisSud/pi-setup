@@ -1,6 +1,6 @@
 ---
 name: babysit-pr
-description: Watch a pull request through CI and review, fix real findings, and report when it is ready. Use when the user says "babysit", "watch this PR", or after filing a PR under full send.
+description: Watch a pull request through CI and review, fix real findings, and report when it is ready. Use when the user says "babysit" or "watch this PR".
 metadata:
   credits:
     skill: babysit-pr

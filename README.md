@@ -81,8 +81,9 @@ fall back to the local SearXNG. See
    the approach, the proof plan and what is out of scope. No ticket graph.
 3. A fresh session runs `/full-send <pointer>`. The pointer is the mode: an
    issue number or URL is github, a file path is local. `full-send` implements,
-   proves, runs `review-loop` (max 3 rounds), then opens and babysits a PR
-   (github) or commits and pushes `main` (local). It never merges.
+   proves, runs `review-loop` (max 3 rounds), then opens a PR (github) or
+   commits and pushes `main` (local). It never merges, and it stops at the open
+   PR: `/babysit` watches one on request.
 
 `/review-loop` is the independent check: one fresh `reviewer`, standards and
 spec conformance, at most three rounds. `/show-me` expands a TLDR into the
