@@ -60,10 +60,11 @@ know before touching it.
   `live` too when the change touches credentials or the network path.
 - **Commit messages**: `<scope>: <subject>` — `env:`, `gmail:`, `calendar:`,
   `skills:`, `agents:`, `pi-setup:` (`git log` shows the style).
-- **The workflow is three skills and a pointer**: `grill` → `spec github|local`
-  → `full-send <pointer>`. `full-send` never merges; github ends at an open PR,
-  local at pushed `main`. `review-loop` is the independent check, capped at 3
-  rounds. Do not add a second skill that re-derives one of these steps.
+- **The workflow is three skills and a pointer**: `grill` (recon, then rounds)
+  → `spec github|local` → `full-send <pointer>`. `full-send` never merges;
+  github ends at an open PR, local at pushed `main`. `review-loop` is the
+  independent check, capped at 3 rounds. Do not add a second skill that
+  re-derives one of these steps.
 
 ## Layout
 

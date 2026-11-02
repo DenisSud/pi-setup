@@ -73,9 +73,9 @@ fall back to the local SearXNG. See
 
 **The workflow is three skills and a pointer.**
 
-1. `/grill` interviews in rounds until the goal, the decisions and the success
-   criteria are shared. It leaves the repo's `GLOSSARY.md` and ADRs current when
-   they exist.
+1. `/grill` reads the codebase first, then interviews in rounds until the goal,
+   the decisions and the success criteria are shared. It leaves the repo's
+   `GLOSSARY.md` and ADRs current when they exist.
 2. `/spec github` publishes one issue; `/spec local` writes one file under
    `/tmp`. The artifact carries the problem, the observable success criteria,
    the approach, the proof plan and what is out of scope. No ticket graph.

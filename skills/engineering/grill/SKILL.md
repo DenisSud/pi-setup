@@ -13,6 +13,34 @@ decisions and the success criteria the same way.
 Map the work as a **design tree**: every decision branches into the decisions
 that hang off it.
 
+## Recon
+
+Before round one, find out what the repo already knows.
+
+Read the files the ask names, then the ones that govern them: `AGENTS.md`,
+`README`, `GLOSSARY.md`, `docs/adr/`, the docs for the area, and `git log
+--oneline -20`. Read the tests around the seam: they state the behavior in a
+form prose cannot. `rg` the ask's terms when the files are not obvious.
+
+Open round one with a fact sheet, five lines at most:
+
+- What the code does today in the area the ask touches.
+- The seam the change lands on: file and line.
+- What already exists that it should reuse rather than rebuild.
+- The constraint that binds: an ADR, an invariant, a test that would break.
+- What the repo cannot answer, and needs a decision.
+
+Post it above the questions. A wrong fact is cheap to correct there and
+expensive inside a question. Facts are asserted, never asked.
+
+When the ask spans several areas, one read-only subagent per area is cheaper
+than one wide read. When the question is where the seam belongs, read
+`../codebase-design/SKILL.md`.
+
+Not every grill has a repo. For a decision or a document, the same pass reads
+the material the ask points at and names what is missing; skip what does not
+exist.
+
 ## Rounds
 
 Work the tree in **rounds**. The **frontier** is every decision whose
@@ -42,10 +70,11 @@ a later round.
 
 ## Facts and decisions
 
-Finding **facts** is your job, never the user's. When a frontier question needs
-a fact from the environment (files, code, docs, a CLI), dispatch a subagent or
-look it up yourself. Do not block the whole round on it: only the questions
-downstream of that fact wait. Ask the rest of the frontier now.
+Finding **facts** is your job, never the user's. Recon covers what the ask
+already implies; a frontier question can still turn up one the repo did not
+volunteer. Look it up yourself or dispatch a subagent, and do not block the
+whole round on it: only the questions downstream of that fact wait. Ask the rest
+of the frontier now.
 
 The **decisions** are the user's. Put each one to them and wait. Push back when
 an answer is vague, contradicts an earlier decision, or assumes a fact that is

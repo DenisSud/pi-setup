@@ -365,8 +365,9 @@ re-derives a step is a second place for the step to drift. So one skill owns
 each phase, a mode argument picks the variant, and the spec pointer carries the
 mode into the next session:
 
-- `grill` folds `grilling` + `grill-with-docs`: same rounds, same frontier, and
-  the glossary/ADR updates only when the repo already has them.
+- `grill` folds `grilling` + `grill-with-docs`: a read of the codebase now opens
+  it, so round one starts from facts the repo already holds; same rounds, same
+  frontier, and the glossary/ADR updates only when the repo already has them.
 - `spec` replaces `to-spec`: one artifact, `github` or `local`, no interview,
   no ticket graph.
 - `full-send` owns both ends: github ends at an open PR, local ends at pushed
