@@ -65,7 +65,7 @@ fall back to the local SearXNG. See
 
 ### Skills
 
-`skills/` holds the 27 skills the agent discovers, grouped as `engineering/`,
+`skills/` holds the 27 skills this package ships, grouped as `engineering/`,
 `productivity/`, `design/`, `creative/`, and tool skills at the top level
 (`agent-browser`, `ascii-animation`, …). Vault-only skills (``daily-planning``,
 ``weekly-review``, ``ocw-vault``) live in the vault itself:
