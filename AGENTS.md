@@ -45,7 +45,9 @@ know before touching it.
   device's `~/.pi/agent/settings.json` scopes the session to
   `opencode-go/deepseek-v4.1-flash` and `opencode-go/kimi-k3.1-pro`;
   `subagents.modelScope` with `enforce` + `strict` allows only the flash model,
-  so a child never runs on anything else. Skills do not pass `model`. A new
+  so the `subagent` tool never runs a child on anything else. `delegate_task`
+  resolves its own model and the scope does not reach it, so `SYSTEM.md` carries
+  the one-model rule for every path. Skills do not pass `model`. A new
   provider is one appended pattern, never a widened glob. See
   [docs/configuration.md](docs/configuration.md#models).
 - **Skills are user-invoked by default**: every `SKILL.md` sets

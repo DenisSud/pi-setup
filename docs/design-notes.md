@@ -427,7 +427,10 @@ deliberate request is a different act from letting the default drift.
 `subagents.modelScope` with `enforce` + `strict` is hard: an explicit `model=`,
 a per-run override or an inherited parent model that is not the flash id fails
 the launch before the child starts. The child rule has no second entry; the
-second session model is for a human decision, not for a routing fallback.
+second session model is for a human decision, not for a routing fallback. It
+covers the `subagent` tool: a `delegate_task` child is resolved by the T3
+orchestrator before pi sees the request, so the prompt's one-model rule is what
+holds that path.
 
 **Rejected: pruning the catalog.** `models.json` can add or replace models per
 provider and rewrite fields through `modelOverrides`, but nothing removes one,
