@@ -412,3 +412,37 @@ worth the feature, so `workflow-scripts` is not in `disabledFeatures`. The new
 `workflow-engineering` skill is the general form: the five patterns, the
 `runs.run`/`runs.all`/`runs.lanes` API, the per-task loadout, one writer per
 tree, structured verdicts, and a pre-launch checklist.
+
+## Two models on `opencode-go`, one for children (2026-11-14)
+
+The provider catalog lists thirty-odd models next to the two that are actually
+used. The noise is not a pricing menu, it is the picker and the cycler listing
+models that should never hold a session.
+
+**The session gets a scope, the children get a ban.** `enabledModels` is pi's
+own scope for startup, `Ctrl+P` and `/model`: matched as `provider/id` patterns,
+and the picker opens on the scoped list. It is soft on purpose — `Tab` still
+shows everything and `--model` still wins — because browsing the catalog for one
+deliberate request is a different act from letting the default drift.
+`subagents.modelScope` with `enforce` + `strict` is hard: an explicit `model=`,
+a per-run override or an inherited parent model that is not the flash id fails
+the launch before the child starts. The child rule has no second entry; the
+second session model is for a human decision, not for a routing fallback.
+
+**Rejected: pruning the catalog.** `models.json` can add or replace models per
+provider and rewrite fields through `modelOverrides`, but nothing removes one,
+so a two-model `opencode-go` there means redefining the provider and copying
+context, cost and thinking metadata that the next catalog refresh invalidates.
+An extension calling `registerProvider` would replace the provider's model list
+the same way, from inside a session that already loaded one. Rejected: a
+`model_select` guard that snaps back to the default, which turns a wrong click
+into a fight with the picker. The scope plus the subagent ban covers the two
+things that matter — what starts a session, and what a child can be — and leaves
+an explicit `--model` as the one escape hatch.
+
+**Adding a provider is a line.** A new provider appends its ids to
+`enabledModels`; `modelScope` does not change, because "every child is the flash
+model" is a rule about children, not about `opencode-go`. Nothing here is
+shipped by the package: `settings.json` is pi's file and per device, so this is
+a block copied onto each machine, documented in
+[configuration](configuration.md#models).

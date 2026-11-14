@@ -41,6 +41,13 @@ know before touching it.
   this setup needs and never fork a whole prompt for style. A per-task skill or
   tool loadout is a launch parameter (`skill`, `tools`), not an
   `agentOverrides` block: there is nothing to re-diff.
+- **Two models on `opencode-go`, one for children.** `enabledModels` in the
+  device's `~/.pi/agent/settings.json` scopes the session to
+  `opencode-go/deepseek-v4.1-flash` and `opencode-go/kimi-k3.1-pro`;
+  `subagents.modelScope` with `enforce` + `strict` allows only the flash model,
+  so a child never runs on anything else. Skills do not pass `model`. A new
+  provider is one appended pattern, never a widened glob. See
+  [docs/configuration.md](docs/configuration.md#models).
 - **Skills are user-invoked by default**: every `SKILL.md` sets
   `disable-model-invocation: true` unless the agent has to reach the skill on
   its own, or another skill does. The 17 that qualify drop the line and keep a

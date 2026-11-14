@@ -16,7 +16,7 @@ One file per concern, the same shape pi uses for `settings.json`, `mcp.json`,
 | `gmail.json` | `gmail` extension | address and IMAP connection facts |
 | `calendar.json` | `calendar` extension | CalDAV URL, collection, credential variable names |
 | `web-search.json` | `pi-web-access` (npm) | search provider order, fallback kinds, the local SearXNG endpoint |
-| `settings.json` | pi | model, theme, packages. Extensions do not add keys here. |
+| `settings.json` | pi | model scope, theme, packages. Extensions do not add keys here. See [Models](#models). |
 | `auth.json` | pi | provider API keys and OAuth tokens — written by `/login` and `pi auth`; extensions never touch it |
 | `mcp-auth.json` | pi | MCP OAuth tokens |
 
@@ -97,6 +97,66 @@ not `direct`, or it declares itself anyway.
 `web_search` is not in this package, so it does not read `PI_TOOL_EXPOSURE`.
 `pi-web-access` has its own switch, `toolExposure` in `web-search.json`
 (`direct` or `deferred`), and it ships as `deferred` to match.
+
+## Models
+
+Two models, both on `opencode-go`: `deepseek-v4.1-flash` for the session and
+`kimi-k3.1-pro` as the alternate. Subagents run on the flash model and nothing
+else. That provider lists thirty more; they stay out of reach.
+
+The keys in `~/.pi/agent/settings.json`:
+
+```json
+{
+  "defaultModel": "deepseek-v4.1-flash",
+  "defaultProvider": "opencode-go",
+  "enabledModels": [
+    "opencode-go/deepseek-v4.1-flash",
+    "opencode-go/kimi-k3.1-pro"
+  ],
+  "subagents": {
+    "defaultModel": "opencode-go/deepseek-v4.1-flash",
+    "defaultProvider": "opencode-go",
+    "modelScope": {
+      "enforce": true,
+      "strict": true,
+      "allow": ["opencode-go/deepseek-v4.1-flash"]
+    }
+  }
+}
+```
+
+Two different strengths, on purpose:
+
+- **`enabledModels` is a scope, not a ban.** It is the list `/scoped-models`
+  writes and the same format as `--models`: patterns matched against
+  `provider/id`, where `*` is the only special character. Startup ignores a
+  saved default that fell out of scope, `Ctrl+P` cycles only these entries, and
+  `/model` opens on the scoped list. `Tab` in that picker still switches to all,
+  and `pi --model <id>` still wins: the scope keeps the catalog out of the way
+  and does not stop a deliberate choice.
+- **`subagents.modelScope` is a ban.** `enforce` rejects an explicit
+  `model=`/`--model` before the child starts, `strict` rejects an inherited
+  model too, and the allowlist is the flash id as a full `provider/id`. The
+  check runs on the resolved model, so a fuzzy id or a `:thinking` suffix
+  cannot slip past it.
+
+`kimi-k3.1-pro` is a session model only. A child cannot run on it: the scope
+rejects it before startup.
+
+This cannot live in `models.json`. A provider's `models` entries add or replace
+models and `modelOverrides` only rewrites fields, so nothing removes a model
+from a catalog; pruning `opencode-go` there would mean redefining the whole
+provider with copied metadata that goes stale at the next catalog refresh.
+
+**Adding a provider** is one line: append its `provider/id` patterns to
+`enabledModels`. `modelScope` stays as it is — "every child is the flash model"
+does not change with the provider. A new pattern is a new entry in the list,
+never a widened glob. An id that stops existing is silent except for a `No
+models match pattern` warning at startup.
+
+`settings.json` is pi's file and per device, so this block is re-applied on each
+device; `/reload` picks it up.
 
 ## Search
 
