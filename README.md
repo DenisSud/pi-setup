@@ -65,7 +65,7 @@ fall back to the local SearXNG. See
 
 ### Skills
 
-`skills/` holds the 27 skills this package ships, grouped as `engineering/`,
+`skills/` holds the 29 skills this package ships, grouped as `engineering/`,
 `productivity/`, `design/`, `creative/`, and tool skills at the top level
 (`agent-browser`, `ascii-animation`, …). Vault-only skills (``daily-planning``,
 ``weekly-review``, ``ocw-vault``) live in the vault itself:
@@ -102,8 +102,8 @@ The tstack flows are the spoken-phrase exception: `full-send`, `review-loop` and
 triggers, not menu choices; hiding them recreates the failure where the user
 says the phrase and the model cannot see the rules.
 
-**Model-invoked (17):** `agent-browser`, `babysit-pr`, `codebase-design`,
-`diagnosing-bugs`, `domain-modeling`, `full-send`, `latex-pdf`, `pr`,
+**Model-invoked (19):** `agent-browser`, `audit`, `babysit-pr`, `codebase-design`,
+`debt`, `diagnosing-bugs`, `domain-modeling`, `full-send`, `latex-pdf`, `pr`,
 `prototype`, `research`, `review-loop`, `self-improvement`, `tdd`, `unslop`,
 `wizard`, `workflow-engineering`, `writing-for-agents`.
 
@@ -118,6 +118,17 @@ parallel searchers, a coverage judge, a single writer, and an audit that
 refetches every cited source. Use the first for a lookup, the second when the
 answer needs many sources and an audited report. Merging them would bury the
 cheap path.
+
+**Ponytail.** The smallest-change discipline comes from
+[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) (MIT).
+Its always-on rule is the `## Code` section of `PROMPT.md`, not a skill: it is a
+bias on every coding turn, and a hidden skill fires only when someone remembers
+it exists. Two procedures are skills because they are reports with an output
+shape: [`audit`](skills/engineering/audit/) ranks a whole repo, and
+[`debt`](skills/engineering/debt/) collects every `shortcut:` comment into a
+ledger. Its levels (`lite`/`full`/`ultra`), mode flags, hooks and its review
+skill are not imported: nothing here keeps state in flag files, and
+`review-loop` already owns the diff review.
 
 `workflow-engineering` is the reference for fan-out: when a graph beats one
 child, the five patterns, the `runs.run`/`runs.all`/`runs.lanes` API, the
@@ -172,10 +183,14 @@ The package is built to keep the request small. Nothing here is declared to
 the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
-it when the name is unknown). Only the 17 model-invoked skills are advertised,
-and only as name, description and path: 5.8k characters, ~1.5k tokens on pi
-1.4.0. All 27 would be 8.3k characters, ~2.1k tokens. `SYSTEM.md` in this repo
-is the prompt.
+it when the name is unknown). Only the 19 model-invoked skills are advertised,
+and only as name, description and path: 8.5k characters, ~2.2k tokens on pi
+1.4.0.
+
+`PROMPT.md` in this repo is the prompt: a device symlinks it to
+`~/.pi/agent/AGENTS.md`, which pi loads as user instructions beside its own
+prompt. `SYSTEM.md` is not used, because it *replaces* pi's prompt and takes the
+tool descriptions and docs paths with it.
 
 The script-only shape is still about three times smaller than declaring the
 tools. The trade is explicit: the agent does not suggest a skill, and nothing in
@@ -186,12 +201,12 @@ A device matches that shape with three things in `~/.pi/agent`:
 
 | what | why |
 |---|---|
-| `SYSTEM.md` → symlink into this checkout | the prompt is versioned here, so a push plus `pi update` changes it with no copy step |
+| `AGENTS.md` → symlink to `PROMPT.md` in this checkout | the prompt is versioned here, so a push plus `pi update` changes it with no copy step |
 | `settings.json` → `"defaultTools": ["+codemode"]` | codemode is opt-in in pi; without it there is no way to reach the tools |
 | `settings.json` → `"packages"` | only packages whose tools are script-only: this one, and the `pi-subagents` fork below |
 
 ```sh
-ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/SYSTEM.md ~/.pi/agent/SYSTEM.md
+ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 ```
 
 `PI_TOOL_EXPOSURE=direct pi` declares every tool of this package in the request

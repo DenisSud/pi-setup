@@ -8,8 +8,10 @@ const skillsRoot = path.join(root, "skills");
 
 const MODEL_INVOKED = new Set([
 	"agent-browser",
+	"audit",
 	"babysit-pr",
 	"codebase-design",
+	"debt",
 	"diagnosing-bugs",
 	"domain-modeling",
 	"full-send",

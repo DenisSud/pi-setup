@@ -141,11 +141,11 @@ Two different strengths, on purpose:
   check runs on the resolved model, so a fuzzy id or a `:thinking` suffix
   cannot slip past it. It guards the `subagent` tool. A `delegate_task` child is
   resolved by the T3 orchestrator before pi sees it, so the scope never runs on
-  that path; the one-model rule in `SYSTEM.md` is what holds it.
+  that path; the one-model rule in `PROMPT.md` is what holds it.
 
 `kimi-k3.1-pro` is a session model only. A `subagent` cannot run on it: the
 scope rejects it before startup. A `delegate_task` child can, because the scope
-does not reach that path, which is why `SYSTEM.md` states the rule for both.
+does not reach that path, which is why `PROMPT.md` states the rule for both.
 
 This cannot live in `models.json`. A provider's `models` entries add or replace
 models and `modelOverrides` only rewrites fields, so nothing removes a model

@@ -120,7 +120,7 @@ mail descriptions are only needed once the task is about calendar or mail.
 
 It started as a separate trial profile in `~/.pi/minimal`. The numbers held, so
 the behaviour moved into the package: `deferred` is now the exposure default,
-`SYSTEM.md` lives in this repo, and a device needs only
+the prompt lives in this repo, and a device needs only
 `defaultTools: ["+codemode"]`. No second agent dir, no wrapper to remember.
 
 Both lists moved out of the prompt:
@@ -220,7 +220,7 @@ child, which never loads the parent's ambient extensions.
 
 ## The prompt carries the repeated instructions (2026-10)
 
-`SYSTEM.md` began as a 31-line "soul" and was cut to 8 lines when the package
+The prompt began as a 31-line "soul" and was cut to 8 lines when the package
 went script-only, on the bet that skills and project `AGENTS.md` files would
 carry the rest. They did not: the same corrections kept returning — TLDR first,
 the smallest change, no "shall I?", check the remote before claiming state,
@@ -271,15 +271,16 @@ The six skills that exist only here follow the same test: `agent-browser`,
 `latex-pdf` and `self-improvement` are reachable because the trigger is a
 situation; `ascii-animation`, `show-me` and `skill-authoring` stay hidden.
 
-`handoff` is hidden like upstream and is deliberately absent from `SYSTEM.md`
+`handoff` is hidden like upstream and is deliberately absent from `PROMPT.md`
 too: he asks for a handoff when he wants one, so a standing instruction to end
 every multi-turn session with a file was a line of prompt spent on a decision
 that is his. The pattern for a hidden skill the prompt does rely on is to name
 its `SKILL.md`, not the command; nothing in the prompt relies on one now.
 
 Cost: pi renders an advertised skill as name, description and absolute path.
-Fourteen is 6.4k characters, ~1.6k tokens on pi 1.4.0; all 31 would be 11.3k
-characters, ~2.8k tokens. Copying upstream is also what keeps this from drifting
+At that measurement 14 entries cost 6.4k characters, ~1.6k tokens on pi 1.4.0,
+and all 31 would have been 11.3k characters. [README](../README.md#prompt-and-tool-set)
+carries the current count and size. Copying upstream is also what keeps this from drifting
 back: a flip is a line of frontmatter plus the `policy` block in the skill's
 `agents/openai.yaml`, and the two harnesses stay in sync.
 
@@ -449,3 +450,70 @@ model" is a rule about children, not about `opencode-go`. Nothing here is
 shipped by the package: `settings.json` is pi's file and per device, so this is
 a block copied onto each machine, documented in
 [configuration](configuration.md#models).
+
+## The prompt is pi's `AGENTS.md`, not `SYSTEM.md` (2026-11-15)
+
+pi 1.4.0 has three prompt slots and they are not interchangeable. `SYSTEM.md`
+*replaces* the default prompt, so an install that uses it has no `tools` section
+naming the declared tools, no `rules` section, and no `docs` section pointing at
+pi's own documentation. `APPEND_SYSTEM.md` appends a section instead.
+`<agent-dir>/AGENTS.md` is the lightest of the three: user instructions loaded as
+a context file ahead of every project `AGENTS.md` and rendered in the same
+`<project_instructions>` block.
+
+The old setup put the prompt in `SYSTEM.md`, so the file that guards against the
+repeated corrections ("TLDR first", "never commit to `main`") also deleted pi's
+own instructions, and the prompt the model got was ours alone. Measured in a
+neutral directory, `SYSTEM.md` mode was a 3.1k-character preamble and nothing
+else; `AGENTS.md` mode is a 169-character preamble, then `<tools>` at 642,
+`<rules>` at 976 and `<docs>` at 1454 characters, with the same instructions in
+`<project_context>`. The base prompt is not decoration: it is what tells the
+model what `codemode` is and where pi's docs live.
+
+The file here is `PROMPT.md`, not `AGENTS.md`, because the repo's own `AGENTS.md`
+is these project notes: an agent dir symlink pointing at it would load the same
+text twice, once as user instructions and once as project instructions (pi
+dedupes context files by path string, and the two paths differ). A device runs:
+
+```sh
+ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
+```
+
+Nothing above it: no `APPEND_SYSTEM.md`, no `.pi/SYSTEM.md`, no wrapper script.
+A second layer is a second thing to keep in sync with pi's own prompt, and the
+sections it would add already have a home.
+
+## Ponytail: the rule in the prompt, two procedures as skills (2026-11-15)
+
+[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) (MIT) is
+a lazy-senior-dev mode with a benchmark behind it: 39 tasks, the same agent with
+and without it, 47% of the lines, and *more* tests on risky logic, not fewer (98%
+against 68%). The valuable part is not the commands.
+
+Its rule is a standing bias: the smallest change that works, an option ladder
+(nothing, already here, stdlib, installed dependency, one line, the minimum),
+scope before writing, no unasked abstraction, one test for non-trivial logic, a
+`shortcut:` comment for a known limit, and never cut validation, security, data
+loss or accessibility. That is `## Code` in `PROMPT.md`, 171 words. As a skill it
+would fire only when he types `/ponytail`, which is the failure the invocation
+audit found: he states the situation, never the procedure name.
+
+Two procedures became skills, because each is a report with an output shape the
+prompt would otherwise restate: `audit` (whole repo, ranked must/should/nice,
+every finding with what it is, the problem, the fix and what happens if skipped)
+and `debt` (every `shortcut:` comment as a ledger row, flagging the ones with no
+upgrade trigger). Both are model-invoked: "audit this repo" and "what did we
+defer" are situations.
+
+Left out on purpose: `lite`/`full`/`ultra`, `off`, the statusline, the session
+hooks and the `.ponytail-active` flag file. They keep the mode in state outside
+the conversation, which is a second source of truth for what the agent is doing;
+`/just-do-it` and the prompt's push-back line already cover both ends of that
+range. Also left out: `ponytail-review`, which is `review-loop` with a different
+output format and a second review brief to keep in step, and
+`ponytail-gain`/`ponytail-help`, which are static text.
+
+Cost, measured: the prompt goes from 590 to 759 words (3.5k to 4.5k characters),
+and two advertised skills add their name, description and path. The trade is the
+same one the prompt section made: pay it once in the request, not again in every
+turn where the agent rebuilds a component the repo already had.
