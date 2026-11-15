@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Quality audit of a whole repo: bugs, security holes, what breaks under real load, risky code without tests, slow paths, and what to delete, merge or split. Ranked, each finding in plain English. One-shot report, changes nothing. Use when the user asks to audit a codebase, review the whole repo, find the bloat, or asks what can be deleted."
+description: "Quality audit of a whole repo: bugs, security holes, what breaks under real load, risky code without tests, slow paths, shallow modules, and what to delete, merge or split. Ranked, each finding in plain English. One-shot report, changes nothing. Use when the user asks to audit a codebase, review the whole repo, find the bloat, asks what can be deleted, or says the architecture is getting in the way."
 metadata:
   credits:
     skill: ponytail-audit
@@ -12,8 +12,9 @@ metadata:
 
 Audit the whole repo like the senior developer who just inherited it and
 will be paged when it breaks. Order of importance: correct, safe, holds under
-load, tested, fast, lean. Lean still matters: every extra line must be read,
-tested and fixed later. This is a report the user asked for, so give it in full.
+load, tested, fast, lean, well-shaped. Lean still matters: every extra line must
+be read, tested and fixed later. This is a report the user asked for, so give it
+in full.
 
 ## 1. Map first
 
@@ -21,13 +22,19 @@ tested and fixed later. This is a report the user asked for, so give it in full.
   Nothing named: the whole repo.
 - Read the README, the deploy and build config, the dependency list, the
   entry points (main, routes, handlers, jobs, CLI commands) and the tests.
+- Weigh attention by churn, not by file count: walk back a stretch of
+  `git log --oneline` and let the paths that keep changing pull your attention
+  first. A module nobody touches can wait; one that changes every week pays for
+  a finding now.
 - Find the expected load: one person running a script, or many users and
   processes at once. Judge scale against that, and say which load you assumed.
 - Trace the main flows end to end: where data comes in, what is stored,
   what goes out. Read those paths fully: input from users, money, auth,
   data writes, background jobs, anything shared between processes.
-- Big repo: go deep where a mistake costs the most, not file by file. Say
-  which parts you did not read.
+- Read `GLOSSARY.md` and any ADRs in the area you audit: the glossary names the
+  modules, and an ADR records a decision this report must not re-litigate.
+- Big repo: fan out one read-only subagent per area, none of them changing
+  code. Say which parts nobody read.
 
 ## 2. Look for
 
@@ -55,6 +62,19 @@ tested and fixed later. This is a report the user asked for, so give it in full.
    - split: one function or class doing several unrelated jobs, so it is
      hard to read or test. Split by job, never by line count, and never into
      helpers that exist only to make a function shorter.
+7. **Shape:** a module whose interface is nearly as complex as its
+   implementation, with no locality. Read `../codebase-design/SKILL.md` and use
+   its words — module, interface, depth, seam, adapter, leverage, locality — not
+   "component" or "service". Where to look, from that skill's friction list:
+   - one concept that takes bouncing between many small modules to understand
+   - pure functions extracted for testability while the real bugs live in how
+     they are called
+   - modules that leak across their seam, so a change in one edits the other
+   - code with no way to test it through its interface
+   Apply the deletion test: if deleting it concentrates complexity, it is
+   earning its keep; if complexity just moves, it is a pass-through. A
+   deepening pays off where the code churns, so a shallow module nobody touches
+   is a nice-to-have, not a finding.
 
 ## 3. Check before you report
 
@@ -67,6 +87,10 @@ tested and fixed later. This is a report the user asked for, so give it in full.
   crosses it.
 - Propose the smallest fix that works. Prefer fixes that delete code. Never
   add layers, frameworks or config the problem does not need.
+- A shape finding names the deepening: the interface that shrinks, what moves
+  behind the seam, and the locality or leverage it buys. No taste, no "could be
+  cleaner". If it contradicts an ADR, say which one and why the friction is
+  worth reopening it.
 - No style taste, no "consider", no vague worries.
 
 ## 4. Output
@@ -81,7 +105,8 @@ Then the findings in three groups, most important first, skip empty groups:
 
 - **Must fix:** bug, security, data loss, breaks at the expected load.
 - **Should fix:** risky code without a test, real slowness, duplication, a
-  function that mixes jobs, code that should not exist.
+  function that mixes jobs, code that should not exist, a shallow module that
+  the churn says will keep costing.
 - **Nice to have:** small speed-ups, shorter forms.
 
 Number findings across all groups, so the user can say "fix 2 and 5". At
@@ -101,7 +126,8 @@ Every finding has all four parts, each one or two short sentences:
 
 End with:
 
-- `Verdict:` one line: healthy, or what to fix first.
+- `Verdict:` one line: healthy, or what to fix first. When the verdict is a
+  shape finding, say it is the one to take into `/grill` next.
 - `Lean: -<N> lines, -<M> dependencies possible.` when lean findings exist.
 - `Not checked:` the parts you did not read or could not run.
 

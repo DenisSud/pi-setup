@@ -259,8 +259,9 @@ skill, including the flips that look surprising at first: `pr`, `research`,
 `tdd`, `code-review`, `prototype`, `codebase-design`, `wizard` and
 `writing-for-agents` are advertised, while `handoff`, `wait-what`, `triage`,
 `wayfinder`, `to-spec`, `to-tickets`, `implement`, `implement-spec`,
-`improve-codebase-architecture`, `grill-with-docs`, `retro`, `ask-matt`,
-`setup-matt-pocock-skills` and `teach` are not.
+`grill-with-docs`, `retro`, `ask-matt`, `setup-matt-pocock-skills` and `teach`
+are not. (`improve-codebase-architecture` was in that list until the audit skill
+absorbed its scan; see the ponytail section below.)
 
 The dependency rule is what makes the split self-consistent rather than taste:
 `implement` (user-invoked) drives `tdd` and closes with `code-review`, so both
@@ -522,3 +523,25 @@ Cost, measured: the prompt goes from 590 to 759 words (3.5k to 4.5k characters),
 and two advertised skills add their name, description and path. The trade is the
 same one the prompt section made: pay it once in the request, not again in every
 turn where the agent rebuilds a component the repo already had.
+
+**`audit` absorbed `improve-codebase-architecture`.** Two repo-wide reports is
+one too many: both mapped the tree, both read the churn, both had a "what can go"
+bucket, and keeping them apart meant each carried a "stay in your lane" line.
+The shape insight is worth keeping and the rest is not:
+
+- kept in `audit`: churn-weighted attention, "read `GLOSSARY.md` and the ADRs,
+  do not re-litigate an ADR", and a **Shape** finding that uses
+  [`codebase-design`](../skills/engineering/codebase-design/SKILL.md)'s words
+  (depth, seam, locality, leverage) with the deletion test. Its output group is
+  "should fix" only when the churn says so, which is the YAGNI weighting that
+  skill existed for.
+- dropped: the 123-line Tailwind/Mermaid HTML report and its `agents/` shim. A
+  before/after diagram is a presentation of a candidate, and the vocabulary it
+  was drawing already lives in `codebase-design`.
+- already covered: the grill-through-the-pick step is `/grill`, the vocabulary
+  is `codebase-design`, and the glossary/ADR updates are `domain-modeling`. A
+  fourth skill holding a copy of each is the overlap this removes.
+
+The catalog is now 28 skills, 19 advertised. Upstream parity is the default, not
+a rule: a skill that adds a phase wins, one that duplicates another one's phase
+loses.

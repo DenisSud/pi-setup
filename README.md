@@ -65,7 +65,7 @@ fall back to the local SearXNG. See
 
 ### Skills
 
-`skills/` holds the 29 skills this package ships, grouped as `engineering/`,
+`skills/` holds the 28 skills this package ships, grouped as `engineering/`,
 `productivity/`, `design/`, `creative/`, and tool skills at the top level
 (`agent-browser`, `ascii-animation`, …). Vault-only skills (``daily-planning``,
 ``weekly-review``, ``ocw-vault``) live in the vault itself:
@@ -109,9 +109,8 @@ says the phrase and the model cannot see the rules.
 `latex-pdf`, `pr`, `prototype`, `research`, `review-loop`, `self-improvement`,
 `tdd`, `unslop`, `wizard`, `workflow-engineering`, `writing-for-agents`.
 
-**User-invoked (10):** `ascii-animation`, `deep-research`, `grill`, `handoff`,
-`improve-codebase-architecture`, `just-do-it`, `show-me`, `spec`, `teach`,
-`wait-what`.
+**User-invoked (9):** `ascii-animation`, `deep-research`, `grill`, `handoff`,
+`just-do-it`, `show-me`, `spec`, `teach`, `wait-what`.
 
 Research has two sizes. `research` is one background reader for one question.
 `deep-research` is the six-stage graph in
@@ -131,6 +130,11 @@ shape: [`audit`](skills/engineering/audit/) ranks a whole repo, and
 ledger. Its levels (`lite`/`full`/`ultra`), mode flags, hooks and its review
 skill are not imported: nothing here keeps state in flag files, and
 `review-loop` already owns the diff review.
+
+`audit` also holds what used to be `improve-codebase-architecture`: a churn map,
+`GLOSSARY.md` and ADR awareness, and a shape finding in `codebase-design`'s
+vocabulary. One repo-wide report instead of two, and `/grill` takes the pick
+from there.
 
 `workflow-engineering` is the reference for fan-out: when a graph beats one
 child, the five patterns, the `runs.run`/`runs.all`/`runs.lanes` API, the

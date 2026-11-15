@@ -33,7 +33,6 @@ const USER_INVOKED = new Set([
 	"deep-research",
 	"grill",
 	"handoff",
-	"improve-codebase-architecture",
 	"just-do-it",
 	"show-me",
 	"spec",
