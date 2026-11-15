@@ -206,6 +206,9 @@ A device matches that shape with three things in `~/.pi/agent`:
 | `settings.json` → `"packages"` | only packages whose tools are script-only: this one, and the `pi-subagents` fork below |
 
 ```sh
+# a machine with a working copy: an edit is live on the next turn
+ln -sf ~/dev/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
+# a machine with only the package: the checkout, refreshed by `pi update`
 ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 ```
 

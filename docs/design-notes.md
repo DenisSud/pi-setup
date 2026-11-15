@@ -476,8 +476,13 @@ text twice, once as user instructions and once as project instructions (pi
 dedupes context files by path string, and the two paths differ). A device runs:
 
 ```sh
-ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
+ln -sf ~/dev/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 ```
+
+That target is the working copy, so an edit is live on the next turn and no
+`pi update` is in the loop. A machine with only the package points at
+`~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md` and refreshes with
+`pi update --extensions`, which is the path that cannot serve an unpushed edit.
 
 Nothing above it: no `APPEND_SYSTEM.md`, no `.pi/SYSTEM.md`, no wrapper script.
 A second layer is a second thing to keep in sync with pi's own prompt, and the
