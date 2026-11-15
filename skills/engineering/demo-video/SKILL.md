@@ -78,9 +78,13 @@ Notes that save a second take:
   Refs die on navigation.
 - Wait for the screen, not for the clock: `agent-browser wait '<selector>'`
   before clicking into it.
+- Build and boot before the recording starts. A compile in the middle of a take
+  is dead air in the gif.
 - Leave a beat after each action. A GIF at 12 fps turns a 300 ms jump into two
   frames, and the reviewer cannot follow it.
-- 30 to 60 seconds is the length. One flow, no scrolling for its own sake.
+- 20 to 60 seconds is the length. One flow, no scrolling for its own sake. A
+  take that lands well under 20 s skipped something; do not re-record only to
+  hit a number.
 - The server prints the demo accounts on first boot; never record a real
   database or a real token.
 - `agent-browser console` and `agent-browser errors` before the stop: an error
