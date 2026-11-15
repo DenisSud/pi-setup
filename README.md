@@ -191,7 +191,7 @@ The package is built to keep the request small. Nothing here is declared to
 the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
-it when the name is unknown). Only the 19 model-invoked skills are advertised,
+it when the name is unknown). Only the 20 model-invoked skills are advertised,
 and only as name, description and path: 9.0k characters, ~2.3k tokens on pi
 1.4.0.
 
