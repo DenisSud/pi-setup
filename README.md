@@ -192,7 +192,7 @@ the model: every tool registers with `exposure: "deferred"`, so it is reachable
 as `tools.<name>(…)` inside a `codemode` script and appears neither in the
 request nor in the codemode description (`searchTools()` and `ALL_TOOLS` find
 it when the name is unknown). Only the 19 model-invoked skills are advertised,
-and only as name, description and path: 8.5k characters, ~2.2k tokens on pi
+and only as name, description and path: 9.0k characters, ~2.3k tokens on pi
 1.4.0.
 
 `PROMPT.md` in this repo is the prompt: a device symlinks it to
