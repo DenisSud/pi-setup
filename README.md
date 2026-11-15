@@ -83,7 +83,9 @@ fall back to the local SearXNG. See
    issue number or URL is github, a file path is local. `full-send` implements,
    proves, runs `review-loop` (max 3 rounds), then opens a PR (github) or
    commits and pushes `main` (local). It never merges, and it stops at the open
-   PR: `/babysit` watches one on request.
+   PR: `/babysit` watches one on request. A change a person can see ships with
+   a recording too: `demo-recorder` clicks through the built interface and
+   publishes a gif and mp4 that the PR body embeds.
 
 `/review-loop` is the independent check: one fresh `reviewer`, standards and
 spec conformance, at most three rounds. `/show-me` expands a TLDR into the
@@ -102,10 +104,10 @@ The tstack flows are the spoken-phrase exception: `full-send`, `review-loop` and
 triggers, not menu choices; hiding them recreates the failure where the user
 says the phrase and the model cannot see the rules.
 
-**Model-invoked (19):** `agent-browser`, `audit`, `babysit-pr`, `codebase-design`,
-`debt`, `diagnosing-bugs`, `domain-modeling`, `full-send`, `latex-pdf`, `pr`,
-`prototype`, `research`, `review-loop`, `self-improvement`, `tdd`, `unslop`,
-`wizard`, `workflow-engineering`, `writing-for-agents`.
+**Model-invoked (20):** `agent-browser`, `audit`, `babysit-pr`, `codebase-design`,
+`debt`, `demo-video`, `diagnosing-bugs`, `domain-modeling`, `full-send`,
+`latex-pdf`, `pr`, `prototype`, `research`, `review-loop`, `self-improvement`,
+`tdd`, `unslop`, `wizard`, `workflow-engineering`, `writing-for-agents`.
 
 **User-invoked (10):** `ascii-animation`, `deep-research`, `grill`, `handoff`,
 `improve-codebase-architecture`, `just-do-it`, `show-me`, `spec`, `teach`,
@@ -153,11 +155,13 @@ catalog; nothing else appears in the agent list.
 | `reviewer` | read-only, with `bash` for `git diff`, `git log`, `gh issue view` and the repo's own test commands. No `watchdog_diff`, no supervisor channel: it reports and stops. |
 | `researcher` | the tools it actually has: `read, write, bash, web_search`, plus the `agent-browser` skill. `pi-web-access` ships `fetch_content`, `get_search_content` and `source_check` beside `web_search` and the child gets none of them: a page is read with `curl -sL`, and the skill covers what needs a browser. |
 | `worker` | upstream's profile verbatim: the single writer, `contact_supervisor` for a decision it cannot make, fresh context, `progress.md`. |
+| `demo-recorder` | drives a real browser through a built interface, records the walk-through, publishes it, and returns the markdown a PR embeds. `read` and `bash` only: it runs, looks and records, it does not edit the repo. `thinking: low`, because this is a short mechanical task. |
 
-All three inherit `opencode-go/deepseek-v4.1-flash` at `high` from
-`subagents.defaultModel` and `subagents.defaultThinking`. No profile pins a
-model or a thinking level, and no skill passes a `model` argument. That is the
-whole policy; a per-run override still exists in the fork and is not used.
+All four inherit `opencode-go/deepseek-v4.1-flash` from `subagents.defaultModel`,
+and `defaultThinking` is `high`. The one pin is `demo-recorder` at
+`thinking: low`: clicking through a screen does not need the reasoning budget.
+No skill passes a `model` argument; a per-run override still exists in the fork
+and stays unused.
 
 A per-task loadout is a launch parameter, not a copy of the profile:
 

@@ -79,6 +79,12 @@ a screenshot. Use the most direct proof the change allows.
   then the full suite once.
 - For UI or runtime behavior, run the app and look at it. Green mocked tests do
   not prove the experience.
+- When a person can see the change, record it: dispatch `demo-recorder` (see
+  `../demo-video/SKILL.md`) with the run command, the port, the demo accounts and
+  the three to five visible changes in review order. It returns one markdown
+  block and its findings. A step it could not drive is a finding, not a reason to
+  record around it. Skip only when nothing visible changed, and say why in the
+  PR body.
 - Record the exact commands and their output for the report.
 
 If you cannot prove the change, stop and ask. Do not ship on confidence.
@@ -103,7 +109,8 @@ the report and stop; the user decides.
 2. Push the branch. Use `--force-with-lease` only if you rebased a branch you
    already pushed, never on the default branch.
 3. Write the PR body with `../pr/SKILL.md`. Open a real PR with `gh pr create`
-   (not a draft). Add one line saying how you proved it.
+   (not a draft). Add one line saying how you proved it, and put the
+   `demo-recorder` block under `Evidence` when you have one.
 4. Stop at the open PR. Watching it is the user's call: `/babysit` when they
    want it. Do not start the watcher, and do not wait for CI in this turn.
 
@@ -127,6 +134,7 @@ TLDR first:
 - What changed: `git diff --stat <base>`.
 - Proof: the commands and what they showed.
 - Review: rounds, verdict, fixed and declined findings.
+- Demo: the recording URL, or why there is none.
 - Shipped: PR link or pushed commit sha.
 - Decisions you made for the user.
 - Follow-ups: declined nits and anything out of scope.
