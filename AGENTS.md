@@ -35,9 +35,11 @@ know before touching it.
   the branch onto the new upstream tag. See [README.md](README.md#subagents-come-from-a-fork).
 - **Our subagent profiles live in `agents/`**, declared under
   `pi.subagents.agents` in `package.json`. `subagents.disableBuiltins` is `true`,
-  so this directory is the whole catalog: `reviewer`, `researcher`, `worker`.
-  All three are copies of the profiles the `pi-subagents` fork bundles,
-  shadowing them by name (package beats builtin). Keep the diff to the lines
+  so this directory is the whole catalog: `reviewer`, `researcher`, `worker`,
+  `demo-recorder`. The first three are copies of the profiles the
+  `pi-subagents` fork bundles, shadowing them by name (package beats builtin);
+  `demo-recorder` is ours alone, with no upstream to shadow, so it carries no
+  diff to keep. Keep the other three's diff to the lines
   this setup needs and never fork a whole prompt for style. A per-task skill or
   tool loadout is a launch parameter (`skill`, `tools`), not an
   `agentOverrides` block: there is nothing to re-diff.
