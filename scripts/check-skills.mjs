@@ -12,6 +12,7 @@ const MODEL_INVOKED = new Set([
 	"babysit-pr",
 	"codebase-design",
 	"debt",
+	"demo-video",
 	"diagnosing-bugs",
 	"domain-modeling",
 	"full-send",

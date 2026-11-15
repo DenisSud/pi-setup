@@ -542,6 +542,6 @@ The shape insight is worth keeping and the rest is not:
   is `codebase-design`, and the glossary/ADR updates are `domain-modeling`. A
   fourth skill holding a copy of each is the overlap this removes.
 
-The catalog is now 28 skills, 19 advertised. Upstream parity is the default, not
+The catalog is now 29 skills, 20 advertised. Upstream parity is the default, not
 a rule: a skill that adds a phase wins, one that duplicates another one's phase
 loses.

@@ -59,7 +59,7 @@ know before touching it.
   own `AGENTS.md` is this file, project notes, not the prompt.
 - **Skills are user-invoked by default**: every `SKILL.md` sets
   `disable-model-invocation: true` unless the agent has to reach the skill on
-  its own, or another skill does. The 19 that qualify drop the line and keep a
+  its own, or another skill does. The 20 that qualify drop the line and keep a
   trigger-shaped description; the split follows `mattpocock/skills` skill for
   skill, so check upstream before flipping one. `full-send`, `review-loop` and
   `babysit-pr` are advertised because their trigger is a spoken phrase, not a
