@@ -545,3 +545,18 @@ The shape insight is worth keeping and the rest is not:
 The catalog is now 29 skills, 20 advertised. Upstream parity is the default, not
 a rule: a skill that adds a phase wins, one that duplicates another one's phase
 loses.
+
+## The session scope drops to one model too (2026-11-17)
+
+The 2026-11-14 note kept two ids in `enabledModels`: the flash model for work
+and `kimi-k3.1-pro` as the alternate a human could pick. The distinction held
+for children and not for the session — two cycler entries for one kind of work
+is a picker with a choice nobody needs to make, and a different model for a
+different job is what `--model` and the picker's `Tab` already do.
+
+`enabledModels` now names the same single id as `subagents.modelScope.allow`:
+one model in the cycler, one model available to a child, and the catalog one
+`Tab` away for a deliberate run. The two scopes stay separate keys with separate
+strengths, and adding a session-only model back is one line in `enabledModels`
+that stays out of the child allowlist, as
+[documented](configuration.md#models).

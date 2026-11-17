@@ -100,9 +100,9 @@ not `direct`, or it declares itself anyway.
 
 ## Models
 
-Two models, both on `opencode-go`: `deepseek-v4.1-flash` for the session and
-`kimi-k3.1-pro` as the alternate. Subagents run on the flash model and nothing
-else. That provider lists thirty more; they stay out of reach.
+One model, on `opencode-go`: `deepseek-v4.1-flash` holds the session and every
+child. Subagents run on it and nothing else. That provider lists thirty more;
+they stay out of reach.
 
 The keys in `~/.pi/agent/settings.json`:
 
@@ -111,8 +111,7 @@ The keys in `~/.pi/agent/settings.json`:
   "defaultModel": "deepseek-v4.1-flash",
   "defaultProvider": "opencode-go",
   "enabledModels": [
-    "opencode-go/deepseek-v4.1-flash",
-    "opencode-go/kimi-k3.1-pro"
+    "opencode-go/deepseek-v4.1-flash"
   ],
   "subagents": {
     "defaultModel": "opencode-go/deepseek-v4.1-flash",
@@ -126,7 +125,7 @@ The keys in `~/.pi/agent/settings.json`:
 }
 ```
 
-Two different strengths, on purpose:
+The two scopes agree, on purpose:
 
 - **`enabledModels` is a scope, not a ban.** It is the list `/scoped-models`
   writes and the same format as `--models`: patterns matched against
@@ -143,9 +142,9 @@ Two different strengths, on purpose:
   resolved by the T3 orchestrator before pi sees it, so the scope never runs on
   that path; the one-model rule in `PROMPT.md` is what holds it.
 
-`kimi-k3.1-pro` is a session model only. A `subagent` cannot run on it: the
-scope rejects it before startup. A `delegate_task` child can, because the scope
-does not reach that path, which is why `PROMPT.md` states the rule for both.
+The session scope names the same single id as the ban, so there is one model to
+pick: the alternate is gone from `Ctrl+P` and the catalog stays one `Tab` away
+when a deliberate `--model` wants something else.
 
 This cannot live in `models.json`. A provider's `models` entries add or replace
 models and `modelOverrides` only rewrites fields, so nothing removes a model
@@ -157,6 +156,10 @@ provider with copied metadata that goes stale at the next catalog refresh.
 does not change with the provider. A new pattern is a new entry in the list,
 never a widened glob. An id that stops existing is silent except for a `No
 models match pattern` warning at startup.
+
+**Adding a session model** is the other direction: an id in `enabledModels` and
+not in `subagents.modelScope.allow` is a model a human can pick and a child
+cannot. Nothing gets that entry by default.
 
 `settings.json` is pi's file and per device, so this block is re-applied on each
 device; `/reload` picks it up.

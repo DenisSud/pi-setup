@@ -43,14 +43,14 @@ know before touching it.
   this setup needs and never fork a whole prompt for style. A per-task skill or
   tool loadout is a launch parameter (`skill`, `tools`), not an
   `agentOverrides` block: there is nothing to re-diff.
-- **Two models on `opencode-go`, one for children.** `enabledModels` in the
-  device's `~/.pi/agent/settings.json` scopes the session to
-  `opencode-go/deepseek-v4.1-flash` and `opencode-go/kimi-k3.1-pro`;
-  `subagents.modelScope` with `enforce` + `strict` allows only the flash model,
-  so the `subagent` tool never runs a child on anything else. `delegate_task`
-  resolves its own model and the scope does not reach it, so `PROMPT.md` carries
-  the one-model rule for every path. Skills do not pass `model`. A new
-  provider is one appended pattern, never a widened glob. See
+- **One model on `opencode-go`, for the session and its children.**
+  `enabledModels` in the device's `~/.pi/agent/settings.json` scopes the session
+  to `opencode-go/deepseek-v4.1-flash`, and `subagents.modelScope` with
+  `enforce` + `strict` allows the same id, so the `subagent` tool never runs a
+  child on anything else. `delegate_task` resolves its own model and the scope
+  does not reach it, so `PROMPT.md` carries the one-model rule for every path.
+  Skills do not pass `model`. A new provider is one appended pattern, never a
+  widened glob. See
   [docs/configuration.md](docs/configuration.md#models).
 - **The prompt is `PROMPT.md`, installed as the agent-dir `AGENTS.md`.** pi
   has two mechanisms and we use the lighter one: `<agent-dir>/AGENTS.md` is user
