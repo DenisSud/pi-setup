@@ -154,7 +154,7 @@ the tool. That is the point — the router moved from the prompt to the skill.
 the model, not callable from a codemode script. Neither lever in settings
 reaches that: `-subagent` also removes it from codemode (`tools.subagent` is
 `undefined`), and the package exposes no exposure setting. So the package is
-forked (`DenisSud/pi-subagents`, branch `pi-setup`, upstream `v0.80.0`) and the
+forked (`densudk/pi-subagents`, branch `pi-setup`, upstream `v0.80.0`) and the
 parent-facing registrations take `SCRIPT_ONLY_TOOL` — `deferred` — while
 child-session registrations keep `model-only`, because a child's prompt is its
 own.
@@ -482,7 +482,7 @@ ln -sf ~/dev/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 
 That target is the working copy, so an edit is live on the next turn and no
 `pi update` is in the loop. A machine with only the package points at
-`~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md` and refreshes with
+`~/.pi/agent/git/github.com/densudk/pi-setup/PROMPT.md` and refreshes with
 `pi update --extensions`, which is the path that cannot serve an unpushed edit.
 
 Nothing above it: no `APPEND_SYSTEM.md`, no `.pi/SYSTEM.md`, no wrapper script.

@@ -7,7 +7,7 @@ the code syncs through git, the machine-local config does not.
 ## Install
 
 ```sh
-pi install git:github.com/DenisSud/pi-setup
+pi install git:github.com/densudk/pi-setup
 pi install npm:pi-web-access      # the search tool lives here, not in this repo
 ```
 
@@ -18,8 +18,8 @@ see [Search](docs/configuration.md#search).
 Project scope, or a specific ref:
 
 ```sh
-pi install -l git:github.com/DenisSud/pi-setup
-pi install git:github.com/DenisSud/pi-setup@v1
+pi install -l git:github.com/densudk/pi-setup
+pi install git:github.com/densudk/pi-setup@v1
 ```
 
 Update / remove:
@@ -217,7 +217,7 @@ A device matches that shape with three things in `~/.pi/agent`:
 # a machine with a working copy: an edit is live on the next turn
 ln -sf ~/dev/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 # a machine with only the package: the checkout, refreshed by `pi update`
-ln -sf ~/.pi/agent/git/github.com/DenisSud/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
+ln -sf ~/.pi/agent/git/github.com/densudk/pi-setup/PROMPT.md ~/.pi/agent/AGENTS.md
 ```
 
 `PI_TOOL_EXPOSURE=direct pi` declares every tool of this package in the request
@@ -227,7 +227,7 @@ codemode description instead.
 ### Subagents come from a fork
 
 `subagent`, `bg_wait`, `subagent_supervisor` and `contact_supervisor` come from
-[DenisSud/pi-subagents](https://github.com/DenisSud/pi-subagents), branch
+[densudk/pi-subagents](https://github.com/densudk/pi-subagents), branch
 `pi-setup`: upstream `v0.80.0` plus two patches. The first: upstream registers
 those tools with `exposure: "model-only"` — declared to the model, invisible to
 a codemode script. `model-only` becomes `deferred`, the activation helpers stop

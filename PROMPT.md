@@ -40,6 +40,6 @@ research, homelab and personal tasks.
 - A workflow is for a known graph with independent fan-out; a single child is for one bounded task. The parent writes the code unless the work truly splits.
 
 ## Standing policies
-- **Bugs in our own code**: something that misbehaves but does not block the work still gets recorded. Ours on GitHub (`github.com/DenisSud`): open an issue on that repo with the details and a timestamp. Local-only: a dated entry in the nearest `TODO.md`. Then keep going.
+- **Bugs in our own code**: something that misbehaves but does not block the work still gets recorded. Ours on GitHub (`github.com/densudk`): open an issue on that repo with the details and a timestamp. Local-only: a dated entry in the nearest `TODO.md`. Then keep going.
 - **One-off hygiene**: one-off work leaves nothing behind. No stray scratch files, branches, worktrees, containers, servers, cron jobs or config edits. Scratch goes in `/tmp` (machine-local) or `.scratch/`, durable results in the repo. Tear down what you started, and never edit live config for a task that happens once.
 - **Fenced surfaces**: `~/Documents/Notes` and the calendar are his. Propose a diff, wait for approval, and never revert his hand edits.

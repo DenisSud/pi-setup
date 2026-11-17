@@ -3,7 +3,7 @@
 ## The checkout is disposable
 
 This repo is installed as a git package and lives in
-`~/.pi/agent/git/github.com/DenisSud/pi-setup`. Pi refuses to run stale or dirty
+`~/.pi/agent/git/github.com/densudk/pi-setup`. Pi refuses to run stale or dirty
 package code: while refreshing packages (`pi install`, `pi update`, and on
 startup when an update marker is present) its package manager runs, in
 `dist/core/package-manager.js`:
